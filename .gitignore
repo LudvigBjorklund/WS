@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# GHDL/Simulation
+*.o
+*.cf
+work-obj93.cf
+*.vcd
+sim_build/
+results.xml
+
+# Quartus
+db/
+incremental_db/
+output_files/
+*.qws
+*.bak
+c5_pin_model_dump.txt
+
+# OS
+.DS_Store
+Thumbs.db

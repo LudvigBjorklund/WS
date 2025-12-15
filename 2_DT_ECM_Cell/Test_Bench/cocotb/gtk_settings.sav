@@ -1,0 +1,76 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sun Dec 14 19:13:57 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/Test_Bench/cocotb/waveform.vcd"
+[dumpfile_mtime] "Sun Dec 14 15:35:15 2025"
+[dumpfile_size] 8452803
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/Test_Bench/cocotb/gtk_settings.sav"
+[timestart] 1420000
+[size] 1409 835
+[pos] 349 197
+*-22.758894 18310000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] digitaltwin.
+[treeopen] digitaltwin.ecm_cell_inst.
+[sst_width] 238
+[signals_width] 257
+[sst_expanded] 1
+[sst_vpaned_height] 283
+@28
+digitaltwin.r_sm_no[2:0]
+@40000024
+[fpshift_count] 12
+digitaltwin.r_i[15:0]
+[fpshift_count] 17
+digitaltwin.r_soc_init[23:0]
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.idx_calc_uut.o_rowidx[11:0]
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.idx_calc_uut.r_colidx[11:0]
+@28
+digitaltwin.ecm_cell_inst.u_ecm_params.idx_calc_uut.i_i[15:0]
+@40000024
+[fpshift_count] 37
+digitaltwin.ecm_cell_inst.u_dv_r0.o_dv_r0[47:0]
+[color] 2
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.r_r0[15:0]
+@40800024
+[color] 2
+[fpshift_count] 21
+digitaltwin.ecm_cell_inst.r_a1[15:0]
+@1001200
+-group_end
+@40000024
+[fpshift_count] 9
+digitaltwin.dv_r0[19:0]
+[fpshift_count] 9
+digitaltwin.dv_rc1[19:0]
+[fpshift_count] 9
+digitaltwin.dv_rc2[19:0]
+@28
+digitaltwin.ecm_cell_inst.u_dv_r0.i_i[15:0]
+@22
+digitaltwin.ecm_cell_inst.u_dv_r0.i_i[15:0]
+@40000024
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_dv_r0.i_r0[15:0]
+[fpshift_count] 37
+digitaltwin.ecm_cell_inst.u_dv_r0.o_dv_r0[47:0]
+@22
+[color] 3
+digitaltwin.ecm_cell_inst.u_dv_rc1.i_i[15:0]
+@40000024
+[color] 3
+[fpshift_count] 21
+digitaltwin.ecm_cell_inst.u_dv_rc1.i_a[15:0]
+[color] 3
+[fpshift_count] 15
+digitaltwin.ecm_cell_inst.u_dv_rc1.i_c[15:0]
+@28
+digitaltwin.ecm_cell_inst.u_dv_rc1.i_step
+@40000025
+[fpshift_count] 36
+digitaltwin.ecm_cell_inst.u_dv_rc1.o_dv[47:0]
+[pattern_trace] 1
+[pattern_trace] 0

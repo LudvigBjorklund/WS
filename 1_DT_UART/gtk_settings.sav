@@ -1,0 +1,25 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sat Nov 29 14:54:03 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA Synthesis/1. DT_UART/tb_unidirectional_comms_waveform.vcd"
+[dumpfile_mtime] "Sat Nov 29 12:08:23 2025"
+[dumpfile_size] 546489
+[savefile] "/home/ludvig/Desktop/FPGA Synthesis/1. DT_UART/gtk_settings.sav"
+[timestart] 0
+[size] 1000 600
+[pos] -1213 15
+*-33.932400 36800000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_unidirectional_comms.
+[treeopen] tb_unidirectional_comms.digitaltwin_inst.
+[treeopen] tb_unidirectional_comms.digitaltwin_inst.dt_uart_32bit_inst.
+[sst_width] 238
+[signals_width] 126
+[sst_expanded] 1
+[sst_vpaned_height] 158
+@28
+tb_unidirectional_comms.digitaltwin_inst.sim_sm_inst.i_state_bin[2:0]
+@29
+tb_unidirectional_comms.digitaltwin_inst.dt_uart_32bit_inst.o_tx
+[pattern_trace] 1
+[pattern_trace] 0

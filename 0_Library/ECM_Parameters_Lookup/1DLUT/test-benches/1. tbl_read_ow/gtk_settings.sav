@@ -1,0 +1,21 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Mon Nov 17 18:40:19 2025
+[*]
+[dumpfile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/tb_tbl_rd_ow_1D_sim_waveform.vcd"
+[dumpfile_mtime] "Mon Nov 17 18:39:28 2025"
+[dumpfile_size] 191652
+[savefile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/gtk_settings.sav"
+[timestart] 0
+[size] 1000 600
+[pos] -1 -1
+*-33.823120 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_tbl_rd_ow_1d_sim.
+[sst_width] 238
+[signals_width] 78
+[sst_expanded] 1
+[sst_vpaned_height] 158
+@28
+tb_tbl_rd_ow_1d_sim.dut.i_clk
+[pattern_trace] 1
+[pattern_trace] 0

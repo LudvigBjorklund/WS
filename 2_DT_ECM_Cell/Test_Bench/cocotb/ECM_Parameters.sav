@@ -1,0 +1,44 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Mon Dec  8 18:56:52 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/Test_Bench/cocotb/waveform.vcd"
+[dumpfile_mtime] "Mon Dec  8 18:52:17 2025"
+[dumpfile_size] 4804556
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/Test_Bench/cocotb/ECM_Parameters.sav"
+[timestart] 2473000
+[size] 1920 1129
+[pos] -1 -1
+*-19.000000 4500000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] digitaltwin.
+[treeopen] digitaltwin.ecm_cell_inst.
+[sst_width] 238
+[signals_width] 114
+[sst_expanded] 1
+[sst_vpaned_height] 309
+@29
+digitaltwin.r_sm_no[2:0]
+@22
+[color] 2
+digitaltwin.ecm_cell_inst.u_ecm_params.i_soc[15:0]
+@40000024
+[color] 2
+[fpshift_count] 12
+digitaltwin.ecm_cell_inst.u_ecm_params.i_i[15:0]
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.r_colidx[11:0]
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.r_rowidx[11:0]
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.r_r0[15:0]
+@40800024
+[fpshift_count] 21
+digitaltwin.ecm_cell_inst.r_a1[15:0]
+@1001200
+-group_end
+@24
+digitaltwin.ecm_cell_inst.r_a2[15:0]
+digitaltwin.ecm_cell_inst.r_c1[15:0]
+digitaltwin.ecm_cell_inst.r_c2[15:0]
+[pattern_trace] 1
+[pattern_trace] 0

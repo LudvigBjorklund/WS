@@ -1,0 +1,929 @@
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                            QHBoxLayout, QPushButton, QLabel, QComboBox, 
+                            QGroupBox, QLineEdit, QMessageBox, QTabWidget,  
+                            QTableWidget, QTableWidgetItem, QProgressBar,
+                            QFileDialog, QTextEdit)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+import os
+import sys
+import time
+import serial
+import threading
+import queue
+import pandas as pd
+from datetime import datetime
+import re
+
+# Add preprocessing functions from the module in the parent directory
+path_to_main_modules = os.path.abspath(os.path.join(os.path.dirname(__file__), '..','..','..'))
+support_functions_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'SupportFunctions'))
+
+sys.path.append( os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(support_functions_path)
+import Preprocessing as preprocess
+import FPGA_Interface as fpga
+import Postprocessing as postprocess
+
+# Importing the GUI modules, the different tabs
+from GUI_Graphics import StateCircle
+
+
+class SerialConnectionManager:
+    """Manages serial connection for the application"""
+    def __init__(self, port_combo, baudrate_combo, connect_button, status_label):
+        self.port_combo = port_combo
+        self.baudrate_combo = baudrate_combo
+        self.connect_button = connect_button
+        self.status_label = status_label
+        self.serial_connection = None
+        
+        # Setup initial state
+        self.connect_button.clicked.connect(self.connect_serial)
+        
+    def connect_serial(self):
+        """Connect to the serial port"""
+        port = self.port_combo.currentText()
+        baudrate = int(self.baudrate_combo.currentText())
+        try:
+            self.serial_connection = serial.Serial(port, baudrate)
+            self.status_label.setText(f"Connected to {port} at {baudrate} baud")
+            self.connect_button.setText("Disconnect")
+            self.connect_button.clicked.disconnect()
+            self.connect_button.clicked.connect(self.disconnect_serial)
+            return True
+        except serial.SerialException as e:
+            self.status_label.setText(f"Error: {e}")
+            return False
+
+    def disconnect_serial(self):
+        """Disconnect from the serial port"""
+        if self.serial_connection:
+            self.serial_connection.close()
+            self.serial_connection = None
+        self.status_label.setText("Disconnected")
+        self.connect_button.setText("Connect")
+        self.connect_button.clicked.disconnect()
+        self.connect_button.clicked.connect(self.connect_serial)
+    
+    def write_to_fpga(self, data):
+        """Write data to the FPGA via serial connection"""
+        if self.serial_connection:
+            try:
+                # Convert the integer to 4 bytes (32 bits)
+                data_bytes = data.to_bytes(4, byteorder='big')
+                self.serial_connection.write(data_bytes)
+                self.serial_connection.flush()  # Ensure all data is sent
+                time.sleep(0.1)  # Add a small delay (100ms) to ensure the buffer is processed
+                return True
+            except Exception as e:
+                self.status_label.setText(f"Error writing to serial port: {e}")
+                return False
+        else:
+            self.status_label.setText("Not connected to serial port")
+            return False
+        
+class ConnectionTab(QWidget):
+    """Tab for managing serial connection and state machine control"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.state_widgets = {}
+        self.current_state = None
+
+        # Define state values (using binary strings for transitions)
+        self.state_ID = '0' * 7 + '1'
+        self.states = {
+            'Idle': self.state_ID + '0' * 24,               # Idle state
+            'Initialization': self.state_ID + '0' * 23 + '1',       # Init state
+            'Verification': self.state_ID + '0' * 22 + '10', # Verification state
+            'Simulation': self.state_ID + '0' * 22 + '11',   # Simulation state
+            'Pause': self.state_ID + '0' * 21 + '100'       # Pause state
+        }
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Serial connection setup
+        connection_group = QGroupBox("Serial Connection")
+        connection_layout = QHBoxLayout()
+
+        self.port_combo = QComboBox()
+        self.port_combo.addItems(["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2", "COM1", "COM2", "COM3"])
+        self.port_combo.setEditable(True)
+
+        self.baudrate_combo = QComboBox()
+        self.baudrate_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
+        self.baudrate_combo.setCurrentText("115200")
+
+        self.connect_button = QPushButton("Connect")
+
+        connection_layout.addWidget(QLabel("Port:"))
+        connection_layout.addWidget(self.port_combo)
+        connection_layout.addWidget(QLabel("Baudrate:"))
+        connection_layout.addWidget(self.baudrate_combo)
+        connection_layout.addWidget(self.connect_button)
+        connection_group.setLayout(connection_layout)
+
+        layout.addWidget(connection_group)
+
+        # State visualization
+        states_group = QGroupBox("State Machine")
+        states_layout = QHBoxLayout()
+
+        for state_name in ["Idle", "Initialization", "Verification", "Simulation", "Pause"]:
+            # Create state circle widgets
+            state_widget = StateCircle(state_name)
+            self.state_widgets[state_name] = state_widget
+            states_layout.addWidget(state_widget)
+
+        states_group.setLayout(states_layout)
+        layout.addWidget(states_group)
+
+        # State transition buttons
+        buttons_layout = QHBoxLayout()
+        for state_name in ["Idle", "Initialization", "Verification", "Simulation", "Pause"]:
+            button = QPushButton(f"Go to {state_name}")
+            button.clicked.connect(lambda checked, s=state_name: self.transition_to_state(s))
+            buttons_layout.addWidget(button)
+        layout.addLayout(buttons_layout)
+
+        # Status indicator
+        self.status_label = QLabel("Not connected")
+        layout.addWidget(self.status_label)
+        # Initialize the connection manager
+        self.connection_manager = SerialConnectionManager(
+            self.port_combo, 
+            self.baudrate_combo, 
+            self.connect_button, 
+            self.status_label
+        )
+        
+        # Set default state
+        self.transition_to_state("Idle", send_to_fpga=False)
+        #         self.transition_to_state("Idle", send_to_fpga=False)
+    
+    def transition_to_state(self, state_name, send_to_fpga=True):
+        """Change the state machine state"""
+        # Update UI states
+        for name, widget in self.state_widgets.items():
+            widget.setActive(name == state_name)
+        self.current_state = state_name
+
+        if send_to_fpga:
+            state_value = self.states[state_name]
+            binary_value = int(state_value, 2)
+            try:
+                success = fpga.write_to_fpga(self.connection_manager.serial_connection, binary_value)
+                if success:
+                    self.status_label.setText(f"Transitioned to {state_name} state")
+            except RuntimeError as e:
+                self.status_label.setText(f"Error: {e}")
+        else:
+            self.status_label.setText(f"UI initialized with {state_name} state")
+
+class CustomSignalTab(QWidget):
+    """Tab for sending custom signals"""
+    def __init__(self, connection_manager, parent=None):
+        super().__init__(parent)
+        self.connection_manager = connection_manager
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Preview buttons for custom signals
+        preview_layout = QHBoxLayout()
+        preview_button = QPushButton("Preview (Decimal)")
+        preview_button.clicked.connect(self.preview_custom_data)
+        preview_binary_button = QPushButton("Preview (Binary)")
+        preview_binary_button.clicked.connect(self.preview_binary_data)
+        preview_layout.addWidget(preview_button)
+        preview_layout.addWidget(preview_binary_button)
+        layout.addLayout(preview_layout)
+
+        # Custom data input section
+        data_group = QGroupBox("Send Custom Data")
+        data_layout = QHBoxLayout()
+
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("Enter ID (decimal, will be '8EN0')")
+        self.value_input = QLineEdit()
+        self.value_input.setPlaceholderText("Enter Value (decimal)")
+
+        self.value_fmt_input = QLineEdit()
+        self.value_fmt_input.setPlaceholderText("Enter format for value (e.g., 24EN0)")
+
+        self.send_button = QPushButton("Send Data")
+        self.send_button.clicked.connect(self.send_custom_data)
+        
+        data_layout.addWidget(QLabel("ID:"))
+        data_layout.addWidget(self.id_input)
+        data_layout.addWidget(QLabel("Value:"))
+        data_layout.addWidget(self.value_input)
+        data_layout.addWidget(QLabel("Format:"))
+        data_layout.addWidget(self.value_fmt_input)
+        data_layout.addWidget(self.send_button)
+        data_group.setLayout(data_layout)
+        layout.addWidget(data_group)
+        
+        # Status label
+        self.status_label = QLabel("Ready to send custom data")
+        layout.addWidget(self.status_label)
+    
+    def process_custom_data(self):
+        """Process the custom signal data"""
+        # Parse the decimal values from the UI fields
+        id_decimal = float(self.id_input.text())
+        value_decimal = float(self.value_input.text())
+
+        # Get the format string from user input or use default
+        fmt_str = self.value_fmt_input.text().strip() or "24EN0"
+        
+        # Convert the ID using the fixed "8EN0" format
+        id_bin = preprocess.decimal_to_binary_string(id_decimal, "8EN0")
+        
+        # Parse the format string to get total bits needed
+        int_bits, frac_bits, is_negative = preprocess.format_parse_string(fmt_str)
+        total_value_bits = int(int_bits) + int(frac_bits)
+        
+        # Convert the value using the provided format
+        value_bin = preprocess.decimal_to_binary_string(value_decimal, fmt_str)
+        
+        # Calculate how many padding bits are needed between ID and value
+        # The total packet should be 32 bits, with 8 bits for ID
+        padding_bits = 24 - total_value_bits
+        
+        # Create the combined binary string with padding in between if needed
+        if padding_bits > 0:
+            combined_bin = id_bin + '0' * padding_bits + value_bin
+        else:
+            # If the value format is already using 24 bits or more
+            combined_bin = id_bin + value_bin
+        
+        # Ensure the combined binary string is exactly 32 bits
+        if len(combined_bin) < 32:
+            combined_bin = combined_bin.rjust(32, '0')
+        elif len(combined_bin) > 32:
+            combined_bin = combined_bin[-32:]  # Keep the 32 LSBs
+            
+        # Convert combined binary string to integer
+        combined_data = int(combined_bin, 2)
+        
+        return {
+            'id_bin': id_bin,
+            'value_bin': value_bin,
+            'padding_bits': padding_bits,
+            'combined_bin': combined_bin,
+            'combined_data': combined_data
+        }
+
+    def format_data_for_display(self, id_bin, value_bin, total_bin):
+        """Format the binary data with proper spacing for display"""
+        return f"ID (8 bits): {id_bin}\nValue: {value_bin}\nCombined (32 bits): {total_bin[:8]} {total_bin[8:]}"
+    
+    def preview_binary_data(self):
+        """Preview the data in binary format"""
+        try:
+            result = self.process_custom_data()
+            
+            # Format the binary data with spacing for display
+            binary_display = self.format_data_for_display(
+                result['id_bin'], 
+                result['value_bin'], 
+                result['combined_bin']
+            )
+            
+            if result['padding_bits'] > 0:
+                padding_info = f"\nPadding bits: {result['padding_bits']} bits inserted between ID and value"
+                binary_display += padding_info
+                
+            QMessageBox.information(self, "Binary Preview", binary_display)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Binary conversion failed: {e}")
+
+    def preview_custom_data(self):
+        """Preview the data in decimal format"""
+        try:
+            result = self.process_custom_data()
+            QMessageBox.information(self, "Converted Value",
+                                   f"Converted value (integer): {result['combined_data']}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Conversion failed: {e}")
+                
+    def send_custom_data(self):
+        """Send the custom data to the FPGA"""
+        try:
+            result = self.process_custom_data()
+            # Send the data to the FPGA
+            fpga.write_to_fpga(self.connection_manager.serial_connection, result['combined_data'])
+            self.status_label.setText("Data sent successfully.")
+        except RuntimeError as e:
+            self.status_label.setText(f"Error: {e}")
+        except Exception as e:
+            self.status_label.setText(f"Unexpected error: {e}")
+
+class PredefinedSignalTab(QWidget):
+    """Tab for sending predefined signals"""
+    def __init__(self, connection_manager, parent=None):
+        super().__init__(parent)
+        self.connection_manager = connection_manager
+        
+        # Define signal parameters in a nested dictionary
+        self.parameter_dict = {
+            'I'  : {'Class':'Parameter','ID': 2, 'Format_String': '5EN11', 'Default_Value': 5, 'Description': 'Current'},
+            'SOC': {'Class':'Parameter','ID': 3, 'Format_String': '7EN9', 'Default_Value': 75, 'Description': 'State of Charge (%)'},
+            'R0' : {'Class':'2DLUT' ,'ID': 4, 'Format_String': '8EN8', 'Default_Value': 127, 'Description': 'Overwrite Internal Resistance [mOhm]'},
+            'a1' : {'Class':'2DLUT' ,'ID': 5, 'Format_String': '-5EN11', 'Default_Value':0.00315581854, 'Description': 'Overwrite the inverted Resistance* Capacitance [Ohm*s]'},
+            'c1' : {'Class':'2DLUT' ,'ID': 6, 'Format_String': '0EN16', 'Default_Value': 0.003596475454, 'Description': 'Overwrite Capacitance [F]'}
+        }
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Signal selection dropdown
+        signal_group = QGroupBox("Send Predefined Signal")
+        signal_layout = QVBoxLayout()
+        
+        # Top row with dropdown and information fields
+        signal_top_layout = QHBoxLayout()
+        
+        # Signal selection dropdown
+        self.signal_dropdown = QComboBox()
+        signal_names = list(self.parameter_dict.keys())
+        self.signal_dropdown.addItems(signal_names)
+        self.signal_dropdown.currentIndexChanged.connect(self.update_signal_info)
+        
+        signal_top_layout.addWidget(QLabel("Signal:"))
+        signal_top_layout.addWidget(self.signal_dropdown)
+        
+        # Signal information fields (read-only)
+        self.signal_id_display = QLineEdit()
+        self.signal_id_display.setReadOnly(True)
+        self.signal_format_display = QLineEdit()
+        self.signal_format_display.setReadOnly(True)
+        self.signal_description_display = QLineEdit()
+        self.signal_description_display.setReadOnly(True)
+        
+        signal_top_layout.addWidget(QLabel("ID:"))
+        signal_top_layout.addWidget(self.signal_id_display)
+        signal_top_layout.addWidget(QLabel("Format:"))
+        signal_top_layout.addWidget(self.signal_format_display)
+        signal_top_layout.addWidget(QLabel("Description:"))
+        signal_top_layout.addWidget(self.signal_description_display)
+        
+        signal_layout.addLayout(signal_top_layout)
+        
+        # Bottom row with value input and send button
+        signal_bottom_layout = QHBoxLayout()
+        
+        self.signal_value_input = QLineEdit()
+        self.signal_preview_button = QPushButton("Preview")
+        self.signal_preview_button.clicked.connect(self.preview_predefined_signal)
+        self.signal_send_button = QPushButton("Send Signal")
+        self.signal_send_button.clicked.connect(self.send_predefined_signal)
+        
+        signal_bottom_layout.addWidget(QLabel("Value:"))
+        signal_bottom_layout.addWidget(self.signal_value_input)
+        signal_bottom_layout.addWidget(self.signal_preview_button)
+        signal_bottom_layout.addWidget(self.signal_send_button)
+        
+        signal_layout.addLayout(signal_bottom_layout)
+        signal_group.setLayout(signal_layout)
+        layout.addWidget(signal_group)
+        
+        # Status label
+        self.status_label = QLabel("Ready to send predefined signals")
+        layout.addWidget(self.status_label)
+        
+        # Initialize the signal info with the first signal
+        self.update_signal_info(0)
+    
+    def update_signal_info(self, index):
+        """Update the signal information fields based on the selected signal"""
+        signal_name = self.signal_dropdown.currentText()
+        if signal_name in self.parameter_dict:
+            signal_info = self.parameter_dict[signal_name]
+            self.signal_id_display.setText(str(signal_info['ID']))
+            self.signal_format_display.setText(signal_info['Format_String'])
+            self.signal_description_display.setText(signal_info['Description'])
+            self.signal_value_input.setText(str(signal_info['Default_Value']))
+        else:
+            # Clear fields if signal not found
+            self.signal_id_display.clear()
+            self.signal_format_display.clear()
+            self.signal_description_display.clear()
+            self.signal_value_input.clear()
+    
+    def process_signal_data(self, id_decimal, value_decimal, format_string):
+        """Process signal data with the given ID, value and format string"""
+        # Convert the ID using the fixed "8EN0" format
+        id_bin = preprocess.decimal_to_binary_string(id_decimal, "8EN0")
+        
+        # Parse the format string to get total bits needed
+        int_bits, frac_bits, is_negative = preprocess.format_parse_string(format_string)
+        total_value_bits = int(int_bits) + int(frac_bits)
+        
+        # Convert the value using the provided format
+        value_bin = preprocess.decimal_to_binary_string(value_decimal, format_string)
+        
+        # Calculate how many padding bits are needed between ID and value
+        # The total packet should be 32 bits, with 8 bits for ID
+        padding_bits = 24 - total_value_bits
+        
+        # Create the combined binary string with padding in between if needed
+        if padding_bits > 0:
+            combined_bin = id_bin + '0' * padding_bits + value_bin
+        else:
+            # If the value format is already using 24 bits or more
+            combined_bin = id_bin + value_bin
+        
+        # Ensure the combined binary string is exactly 32 bits
+        if len(combined_bin) < 32:
+            combined_bin = combined_bin.rjust(32, '0')
+        elif len(combined_bin) > 32:
+            combined_bin = combined_bin[-32:]  # Keep the 32 LSBs
+            
+        # Convert combined binary string to integer
+        combined_data = int(combined_bin, 2)
+        
+        return {
+            'id_bin': id_bin,
+            'value_bin': value_bin,
+            'padding_bits': padding_bits,
+            'combined_bin': combined_bin,
+            'combined_data': combined_data
+        }
+
+    def format_data_for_display(self, id_bin, value_bin, total_bin):
+        """Format the binary data with proper spacing for display"""
+        return f"ID (8 bits): {id_bin}\nValue: {value_bin}\nCombined (32 bits): {total_bin[:8]} {total_bin[8:]}"
+
+    def preview_predefined_signal(self):
+        """Preview the currently selected predefined signal."""
+        try:
+            signal_name = self.signal_dropdown.currentText()
+            signal_info = self.parameter_dict[signal_name]
+            
+            id_decimal = signal_info['ID']
+            value_decimal = float(self.signal_value_input.text())
+            format_string = signal_info['Format_String']
+            
+            # Process the signal data
+            result = self.process_signal_data(id_decimal, value_decimal, format_string)
+            
+            # Show both decimal and binary previews
+            preview_text = f"Signal: {signal_name} ({signal_info['Description']})\n"
+            preview_text += f"Decimal value: {result['combined_data']}\n\n"
+            preview_text += f"Binary representation:\n"
+            preview_text += self.format_data_for_display(
+                result['id_bin'], 
+                result['value_bin'], 
+                result['combined_bin']
+            )
+            
+            if result['padding_bits'] > 0:
+                preview_text += f"\n\nPadding bits: {result['padding_bits']} bits inserted between ID and value"
+                
+            QMessageBox.information(self, f"Preview: {signal_name}", preview_text)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Preview failed: {e}")
+        
+    def send_predefined_signal(self):
+        """Send the currently selected predefined signal."""
+        try:
+            # Check if the serial connection is active
+            if not self.connection_manager.serial_connection:
+                self.status_label.setText("Error: Not connected to a serial port.")
+                return
+
+            signal_name = self.signal_dropdown.currentText()
+            signal_info = self.parameter_dict[signal_name]
+            
+            id_decimal = signal_info['ID']
+            value_decimal = float(self.signal_value_input.text())
+            format_string = signal_info['Format_String']
+            
+            # Process the signal data
+            result = self.process_signal_data(id_decimal, value_decimal, format_string)
+            
+            # Send the combined data using the connection manager
+            fpga.write_to_fpga(self.connection_manager.serial_connection, result['combined_data'])
+            self.status_label.setText(f"Signal '{signal_name}' sent successfully.")
+        except ValueError as e:
+            self.status_label.setText(f"Error: {e}")
+        except RuntimeError as e:
+            self.status_label.setText(f"Error: {e}")
+        except Exception as e:
+            self.status_label.setText(f"Unexpected error: {e}")
+
+    def process_signal_data(self, id_decimal, value_decimal, format_string):
+        """Process signal data with the given ID, value and format string."""
+        # Convert the ID using the fixed "8EN0" format
+        id_bin = preprocess.decimal_to_binary_string(id_decimal, "8EN0")
+        
+        # Parse the format string to get total bits needed
+        int_bits, frac_bits, is_negative = preprocess.format_parse_string(format_string)
+        total_value_bits = int(int_bits) + int(frac_bits)
+        
+        
+        # Convert the value using the provided format
+        value_bin = preprocess.decimal_to_binary_string(value_decimal, format_string)
+        
+        # Calculate how many padding bits are needed between ID and value
+        # The total packet should be 32 bits, with 8 bits for ID
+        padding_bits = 24 - total_value_bits
+        
+        # Create the combined binary string with padding in between if needed
+        if padding_bits > 0:
+            combined_bin = id_bin + '0' * padding_bits + value_bin
+        else:
+            # If the value format is already using 24 bits or more
+            combined_bin = id_bin + value_bin
+        
+        # Ensure the combined binary string is exactly 32 bits
+        if len(combined_bin) < 32:
+            combined_bin = combined_bin.rjust(32, '0')
+        elif len(combined_bin) > 32:
+            combined_bin = combined_bin[-32:]  # Keep the 32 LSBs
+            
+        # Convert combined binary string to integer
+        combined_data = int(combined_bin, 2)
+        
+        return {
+            'id_bin': id_bin,
+            'value_bin': value_bin,
+            'padding_bits': padding_bits,
+            'combined_bin': combined_bin,
+            'combined_data': combined_data
+        }
+
+    def format_data_for_display(self, id_bin, value_bin, total_bin):
+        """Format the binary data with proper spacing for display."""
+        return f"ID (8 bits): {id_bin}\nValue: {value_bin}\nCombined (32 bits): {total_bin[:8]} {total_bin[8:]}"
+    
+    def start_verification(self):
+        """Start the verification process in a separate thread."""
+        port = self.port_combo.currentText()
+        baud_rate = int(self.baudrate_combo.currentText())
+        output_file = "fpga_data.txt"
+        payload_file = "payloads.txt"
+
+        self.verification_progress.setValue(0)
+        self.status_label.setText("Starting verification...")
+
+        def run_verification_thread():
+            # Run the verification process
+            results = fpga.table_verification_threaded(port, baud_rate, output_file)
+
+            if not results:
+                self.status_label.setText("Verification failed: No results found.")
+                return
+
+            # Process the results to generate the payloads.txt file
+            with open(payload_file, "w") as f:
+                for (row, col), payload in results.items():
+                    f.write(f"({row},{col}): {payload}\n")
+                    print(f"({row},{col}): {payload}")
+
+            # Process the payload file and update the table
+            self.process_payload_and_update_table(payload_file)
+
+        threading.Thread(target=run_verification_thread, daemon=True).start()
+
+    def process_payload_and_update_table(self, payload_file):
+        """Process the payload file and update the verification table."""
+        self.status_label.setText("Processing payload data...")
+
+        try:
+            # Process the payload file
+            data_dict = postprocess.process_txt_file(payload_file)
+            df = postprocess.coordinate_dict_to_df(data_dict)
+
+            # Update the verification table
+            self.update_verification_table_from_df(df)
+            self.status_label.setText("Verification complete.")
+        except Exception as e:
+            self.status_label.setText(f"Error processing payload: {e}")
+            
+    def update_verification_table_from_df(self, df):
+        """Update the verification table with the DataFrame."""
+        self.verification_table.setRowCount(len(df.index))
+        self.verification_table.setColumnCount(len(df.columns))
+        self.verification_table.setHorizontalHeaderLabels([str(col) for col in df.columns])
+        self.verification_table.setVerticalHeaderLabels([str(row) for row in df.index])
+
+        for row_idx, row in enumerate(df.index):
+            for col_idx, col in enumerate(df.columns):
+                value = df.at[row, col]
+                if pd.notna(value):  # Only set non-NaN values
+                    self.verification_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+
+    def process_custom_data(self):
+        """Process the custom data and return the components."""
+        # Parse the decimal values from the UI fields
+        id_decimal = float(self.id_input.text())
+        value_decimal = float(self.value_input.text())
+
+        # Get the format string from user input or use default
+        fmt_str = self.value_fmt_input.text().strip() or "24EN0"
+        
+        # Use the common processing function
+        return self.process_signal_data(id_decimal, value_decimal, fmt_str)
+
+    def preview_binary_data(self):
+        """Preview the data in binary format with spacing between ID and value."""
+        try:
+            result = self.process_custom_data()
+            
+            # Format the binary data with spacing for display
+            binary_display = self.format_data_for_display(
+                result['id_bin'], 
+                result['value_bin'], 
+                result['combined_bin']
+            )
+            
+            if result['padding_bits'] > 0:
+                padding_info = f"\nPadding bits: {result['padding_bits']} bits inserted between ID and value"
+                binary_display += padding_info
+                
+            QMessageBox.information(self, "Binary Preview", binary_display)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Binary conversion failed: {e}")
+
+    def preview_custom_data(self):
+        try:
+            result = self.process_custom_data()
+            QMessageBox.information(self, "Converted Value",
+                                    f"Converted value (integer): {result['combined_data']}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Conversion failed: {e}")
+            
+    def send_custom_data(self):
+        """Send the custom data to the FPGA."""
+        try:
+            # Check if the serial connection is active
+            if not self.connection_manager.serial_connection:
+                self.status_label.setText("Error: Not connected to a serial port.")
+                return
+
+            result = self.process_custom_data()
+            # Send the data to the FPGA
+            fpga.write_to_fpga(self.connection_manager.serial_connection, result['combined_data'])
+            self.status_label.setText("Data sent successfully.")
+        except RuntimeError as e:
+            self.status_label.setText(f"Error: {e}")
+        except Exception as e:
+            self.status_label.setText(f"Unexpected error: {e}")
+    def connect_serial(self):
+        port = self.port_combo.currentText()
+        baudrate = int(self.baudrate_combo.currentText())
+        try:
+            self.serial_connection = serial.Serial(port, baudrate)
+            self.status_label.setText(f"Connected to {port} at {baudrate} baud")
+            self.connect_button.setText("Disconnect")
+            self.connect_button.clicked.disconnect()
+            self.connect_button.clicked.connect(self.disconnect_serial)
+        except serial.SerialException as e:
+            self.status_label.setText(f"Error: {e}")
+
+    def disconnect_serial(self):
+        if self.serial_connection:
+            self.serial_connection.close()
+            self.serial_connection = None
+        self.status_label.setText("Disconnected")
+        self.connect_button.setText("Connect")
+        self.connect_button.clicked.disconnect()
+        self.connect_button.clicked.connect(self.connect_serial)
+
+    def transition_to_state(self, state_name, send_to_fpga=True):
+        # Update UI states
+        for name, widget in self.state_widgets.items():
+            widget.setActive(name == state_name)
+        self.current_state = state_name
+        if send_to_fpga and self.serial_connection:
+            state_value = self.states[state_name]
+            binary_value = int(state_value, 2)
+            fpga.write_to_fpga(binary_value)
+            self.status_label.setText(f"Transitioned to {state_name} state")
+        elif not send_to_fpga:
+            self.status_label.setText(f"UI initialized with {state_name} state")
+        else:
+            self.status_label.setText(f"Not connected: Can't send {state_name} state to FPGA")
+
+    def write_to_fpga(self, data):
+        if self.serial_connection:
+            try:
+                # Convert the integer to 4 bytes (32 bits)
+                data_bytes = data.to_bytes(4, byteorder='big')
+                self.serial_connection.write(data_bytes)
+                self.serial_connection.flush()  # Ensure all data is sent
+                time.sleep(0.1)  # Add a small delay (100ms) to ensure the buffer is processed
+
+            except Exception as e:
+                self.status_label.setText(f"Error writing to serial port: {e}")
+
+class SerialReaderTab(QWidget):
+    """Tab for high-speed serial reading"""
+    def __init__(self, connection_manager, parent=None):
+        super().__init__(parent)
+        self.connection_manager = connection_manager
+        self.serial_reader = None
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Set up the UI for the serial reader tab"""
+        layout = QVBoxLayout(self)
+
+        # File selection
+        file_layout = QHBoxLayout()
+        self.file_path_edit = QLineEdit()
+        self.file_path_edit.setPlaceholderText("Select output file...")
+        self.browse_button = QPushButton("Browse")
+        self.browse_button.clicked.connect(self.select_output_file)
+        file_layout.addWidget(self.file_path_edit)
+        file_layout.addWidget(self.browse_button)
+        layout.addLayout(file_layout)
+
+        # Duration input
+        duration_layout = QHBoxLayout()
+        self.duration_edit = QLineEdit()
+        self.duration_edit.setPlaceholderText("Enter duration (seconds, optional)")
+        duration_layout.addWidget(QLabel("Duration:"))
+        duration_layout.addWidget(self.duration_edit)
+        layout.addLayout(duration_layout)
+
+        # Serial reader controls
+        control_layout = QHBoxLayout()
+        self.start_reader_button = QPushButton("Start Reading")
+        self.start_reader_button.clicked.connect(self.start_serial_reader)
+        self.stop_reader_button = QPushButton("Stop Reading")
+        self.stop_reader_button.clicked.connect(self.stop_serial_reader)
+        self.stop_reader_button.setEnabled(False)
+        control_layout.addWidget(self.start_reader_button)
+        control_layout.addWidget(self.stop_reader_button)
+        layout.addLayout(control_layout)
+
+        # Status display
+        self.reader_status_label = QLabel("Ready")
+        layout.addWidget(self.reader_status_label)
+
+        # Console output
+        self.reader_console = QTextEdit()
+        self.reader_console.setReadOnly(True)
+        layout.addWidget(self.reader_console)
+
+    def select_output_file(self):
+        """Open a file dialog to select the save location."""
+        options = QFileDialog.Option.DontUseNativeDialog
+        file_name, _ = QFileDialog.getSaveFileName(
+            self,
+            "Select Output File",
+            "",
+            "Text Files (*.txt);;All Files (*)",
+            options=options
+        )
+        if file_name:
+            self.file_path_edit.setText(file_name)
+
+    def start_serial_reader(self):
+        """Start the high-speed serial reader."""
+        if self.serial_reader and self.serial_reader.isRunning():
+            QMessageBox.warning(self, "Warning", "Reader is already running")
+            return
+
+        port = self.connection_manager.port_combo.currentText()
+        baud_rate = int(self.connection_manager.baudrate_combo.currentText())
+        output_file = self.file_path_edit.text()
+
+        if not output_file:
+            QMessageBox.warning(self, "Warning", "Please select an output file")
+            return
+
+        try:
+            duration = float(self.duration_edit.text()) if self.duration_edit.text() else None
+        except ValueError:
+            QMessageBox.warning(self, "Warning", "Invalid duration value")
+            return
+
+        self.reader_console.clear()
+        self.reader_status_label.setText("Starting serial reader...")
+
+        self.serial_reader = fpga.SerialReaderThread(
+            port=port,
+            baud_rate=baud_rate,
+            output_file=output_file,
+            read_time=duration
+        )
+
+        self.serial_reader.update_signal.connect(self.update_reader_status)
+        self.serial_reader.finished_signal.connect(self.reader_finished)
+        self.serial_reader.start()
+
+        self.start_reader_button.setEnabled(False)
+        self.stop_reader_button.setEnabled(True)
+
+    def stop_serial_reader(self):
+        """Stop the high-speed serial reader."""
+        if self.serial_reader and self.serial_reader.isRunning():
+            self.serial_reader.stop()
+            self.reader_status_label.setText("Stopping reader...")
+            self.stop_reader_button.setEnabled(False)
+
+    def update_reader_status(self, message):
+        """Update the console with messages from the serial reader."""
+        self.reader_console.append(message)
+
+    def reader_finished(self, bytes_read):
+        """Handle the completion of the serial reader."""
+        self.reader_status_label.setText(f"Reader finished. {bytes_read} bytes read")
+        self.start_reader_button.setEnabled(True)
+        self.stop_reader_button.setEnabled(False)
+        self.serial_reader = None
+        
+
+class MainWindow(QMainWindow):
+    """Main application window"""
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Digital Twin Interface")
+        self.resize(800, 600)
+
+        # Create the main tab widget
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        # Create a shared SerialConnectionManager instance
+        self.connection_manager = SerialConnectionManager(None, None, None, None)
+
+        # Add tabs
+        self.add_tabs()
+
+    def add_tabs(self):
+        """Add tabs to the main window"""
+        # Connection tab
+        connection_tab = ConnectionTab(self.connection_manager)
+        self.tab_widget.addTab(connection_tab, "Connection")
+
+        # Custom signal tab
+        custom_signal_tab = CustomSignalTab(self.connection_manager)
+        self.tab_widget.addTab(custom_signal_tab, "Custom Signals")
+
+        # Predefined signal tab
+        predefined_signal_tab = PredefinedSignalTab(self.connection_manager)
+        self.tab_widget.addTab(predefined_signal_tab, "Predefined Signals")
+
+        # Serial reader tab
+        serial_reader_tab = SerialReaderTab(self.connection_manager)
+        self.tab_widget.addTab(serial_reader_tab, "Serial Reader")
+
+class MainWindow(QMainWindow):
+    """Main application window"""
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Digital Twin Interface")
+        self.resize(800, 600)
+
+        # Create the main tab widget
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        # Add tabs
+        self.add_tabs()
+
+    def add_tabs(self):
+        """Add tabs to the main window"""
+        # Connection tab
+        connection_tab = ConnectionTab()
+        self.tab_widget.addTab(connection_tab, "Connection")
+
+        # Initialize the connection manager after creating the ConnectionTab
+        self.connection_manager = SerialConnectionManager(
+            port_combo=connection_tab.port_combo,
+            baudrate_combo=connection_tab.baudrate_combo,
+            connect_button=connection_tab.connect_button,
+            status_label=connection_tab.status_label
+        )
+
+        # Pass the connection manager to other tabs
+        custom_signal_tab = CustomSignalTab(self.connection_manager)
+        self.tab_widget.addTab(custom_signal_tab, "Custom Signals")
+
+        predefined_signal_tab = PredefinedSignalTab(self.connection_manager)
+        self.tab_widget.addTab(predefined_signal_tab, "Predefined Signals")
+
+        serial_reader_tab = SerialReaderTab(self.connection_manager)
+        self.tab_widget.addTab(serial_reader_tab, "Serial Reader")
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()  # Use MainWindow instead of StateMachineGUI
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__": 
+    main()

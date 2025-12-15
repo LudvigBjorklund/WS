@@ -1,0 +1,70 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sun Nov 23 15:17:50 2025
+[*]
+[dumpfile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/2. LUT1D/tb_LUT1D_sim_waveform.vcd"
+[dumpfile_mtime] "Sun Nov 23 15:08:30 2025"
+[dumpfile_size] 1263323
+[savefile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/2. LUT1D/Overwrite.sav"
+[timestart] 1000000000
+[size] 1920 1033
+[pos] 0 0
+*-29.207785 3012000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_lut1d_sim.
+[treeopen] tb_lut1d_sim.dut.
+[sst_width] 238
+[signals_width] 349
+[sst_expanded] 1
+[sst_vpaned_height] 109
+@420
+tb_lut1d_sim.tb_state_no
+@22
+tb_lut1d_sim.dut.r_wr_addr[3:0]
+tb_lut1d_sim.dut.i_ow_addr[3:0]
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_waddr[3:0]
+@40000024
+[fpshift_count] 8
+tb_lut1d_sim.dut.wr_data[19:0]
+@22
+tb_lut1d_sim.dut.i_lut_addr[23:0]
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_raddr[3:0]
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_data[19:0]
+tb_lut1d_sim.dut.tbl_1d_reset_tables.i_raddr[3:0]
+tb_lut1d_sim.dut.tbl_1d_reset_tables.o_data[19:0]
+@28
+tb_lut1d_sim.dut.tbl_1d_reset_tables.o_data[19:0]
+@22
+>800000
+tb_lut1d_sim.dut.o_val[47:0]
+@28
+>0
+tb_lut1d_sim.dut.r_wr_en
+tb_lut1d_sim.tb_clk
+@22
+tb_lut1d_sim.dut.tbl_1d_reset_tables.i_raddr[3:0]
+@28
+tb_lut1d_sim.dut.tbl_1d_reset_tables.o_data[19:0]
+tb_lut1d_sim.dut.tbl_1d_reset_tables.i_clk
+tb_lut1d_sim.dut.w1[19:0]
+tb_lut1d_sim.dut.w2[19:0]
+@40000024
+[fpshift_count] 36
+tb_lut1d_sim.dut.o_val[47:0]
+@40000028
+[fpshift_count] 36
+tb_lut1d_sim.dut.o_val[47:0]
+@40000024
+[fpshift_count] 8
+tb_lut1d_sim.dut.x11[19:0]
+[fpshift_count] 8
+tb_lut1d_sim.dut.y11[19:0]
+@420
+tb_lut1d_sim.dut.pipeline_step
+@28
+tb_lut1d_sim.dut.i_lut_addr[23:0]
+@22
+tb_lut1d_sim.dut.x11_addr[3:0]
+tb_lut1d_sim.dut.y11_addr[3:0]
+tb_lut1d_sim.dut.y11[19:0]
+[pattern_trace] 1
+[pattern_trace] 0

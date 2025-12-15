@@ -1,0 +1,37 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Thu Nov 27 08:58:32 2025
+[*]
+[dumpfile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/2. LUT1D/tb_LUT1D_sim_waveform.vcd"
+[dumpfile_mtime] "Thu Nov 27 07:45:07 2025"
+[dumpfile_size] 1056434
+[savefile] "/home/ludvig/Documents/Digital Twin/Synthesized FPGA Projects/0. Library/ECM_Parameters_Lookup/1DLUT/test-benches/2. LUT1D/gtk_settings.sav"
+[timestart] 0
+[size] 1920 1033
+[pos] 0 23
+*-27.185064 305000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_lut1d_sim.
+[treeopen] tb_lut1d_sim.dut.
+[sst_width] 238
+[signals_width] 147
+[sst_expanded] 1
+[sst_vpaned_height] 147
+@28
+tb_lut1d_sim.dut.i_clk
+@40000024
+[fpshift_count] 8
+tb_lut1d_sim.dut.x11[19:0]
+@22
+tb_lut1d_sim.dut.x11_addr[3:0]
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_data[19:0]
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_raddr[3:0]
+tb_lut1d_sim.dut.i_ow_addr[3:0]
+@28
+tb_lut1d_sim.dut.i_ow_data[19:0]
+@22
+tb_lut1d_sim.dut.tbl_1d_rd_ow_x11.i_data[19:0]
+@40000025
+[fpshift_count] 36
+tb_lut1d_sim.dut.o_val[47:0]
+[pattern_trace] 1
+[pattern_trace] 0

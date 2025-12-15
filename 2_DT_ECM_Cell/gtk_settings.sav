@@ -1,0 +1,30 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sun Dec  7 09:58:31 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/tb_DT_waveform.vcd"
+[dumpfile_mtime] "Sun Dec  7 09:58:28 2025"
+[dumpfile_size] 3861458
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/2_DT_ECM_Cell/gtk_settings.sav"
+[timestart] 0
+[size] 1920 1129
+[pos] -1 -1
+*-29.629517 232300000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_dt.
+[treeopen] tb_dt.digitaltwin_inst.
+[sst_width] 238
+[signals_width] 240
+[sst_expanded] 1
+[sst_vpaned_height] 219
+@28
+tb_dt.digitaltwin_inst.i_clk
+@22
+tb_dt.digitaltwin_inst.bcd_inst.i_bin[19:0]
+@28
+tb_dt.digitaltwin_inst.r_sm_no[2:0]
+tb_dt.digitaltwin_inst.i_clk
+@22
+tb_dt.digitaltwin_inst.rx_datapacket[215:0]
+tb_dt.digitaltwin_inst.i_sw[9:0]
+[pattern_trace] 1
+[pattern_trace] 0
