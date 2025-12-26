@@ -8,7 +8,7 @@ package ConfigurationData is
 -- =============================================================================================
 -- =========================== Simulation Setttings  =============================
 -- ============================================================================================= 
-    constant c_timestep : integer := 4; -- dt^(-timestep)
+    constant c_timestep : integer := 3; -- dt^(-timestep)
     
 -- =============================================================================================
 -- =========================== Data Width Settings =============================
@@ -145,7 +145,7 @@ constant c_hw_SOC0      : unsigned(n_b_SOC - 1 downto 0) := to_unsigned(c_hw_SOC
     -- ========================================
     -- No. of Interface Signals
     -- ========================================
-    constant c_rx_no_sig : integer := 9; -- Number of signals to be received
+    constant c_rx_no_sig : integer := 9;     -- Number of signals to be received
     constant c_tx_no_sim_sig : integer := 3; -- Number of signals to be transmitted in simulation mode CHANGE BEFORE SYNTHESIS
     constant c_tx_no_ver_sig : integer := 4; -- Number of signals to be transmitted in verification mode
     constant c_tx_no_sig : integer := max(c_tx_no_sim_sig, c_tx_no_ver_sig); -- Maximum number of signals to be transmitted (for array sizing)

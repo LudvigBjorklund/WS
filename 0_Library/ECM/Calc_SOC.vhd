@@ -14,7 +14,7 @@ entity Calc_SOC is
         n_frac_SOC : integer := 9;
         n_int_I : integer := 4;
         n_frac_I : integer := 12;
-        n_int_Q  : integer := -8;
+        n_int_Q  : integer := -8; -- Format -8EN16
         n_frac_Q  : integer := 16
     );
     port(
@@ -66,7 +66,7 @@ begin
                 SOC_tmp <=  i_SOC0 & to_unsigned(0, IQ'left-i_SOC0'left );
                 result(result'left -1 downto 0) <= SOC_tmp;
             when s_init =>
-                initialization_done <= '0';
+                -- initialization_done <= '0';
                 if initialization_done = '0' then
                     IQ(IQ'left-((n_int_SOC - (n_int_I + n_int_Q))+timestep) downto 0) <= i_I * i_Q; -- By skipping the timesteps we perform a shifting operation to cover dt multiplication
                     SOC_tmp(SOC_tmp'left downto SOC_tmp'left - n_b_SOC+1) <= i_soc0; -- Assigning the current SOC value to the MSBs of SOC_tmp
@@ -74,7 +74,6 @@ begin
                     if wait_variable = '1' then
                         initialization_done <= '1';
                         result(result'left -1 downto 0) <= SOC_tmp;
-
                     else 
                         wait_variable := '1';
                     end if;

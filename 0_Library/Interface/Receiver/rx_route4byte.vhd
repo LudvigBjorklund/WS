@@ -22,8 +22,45 @@ architecture rtl of rx_route4byte is
     signal dbg_tracker_vindex : integer range 0 to n_signals-1 := 0; -- Debug tracker for the index of the signal being processed
 begin 
 
+    -- assign_data2bus_p : process(i_clk)
+    -- variable v_index : integer range 0 to n_signals-1;
+    -- variable v_index_temp : integer;  -- Unconstrained for bounds checking
+    -- variable one_clk_cycle_reset : integer := 0;
+    -- begin
+    --     if rising_edge(i_clk) then
+    --         dbg_tracker_vindex <= v_index;
+    --         if r_initialize = 0 then
+    --             o_data <= i_init_data;
+    --         else
+    --             if i_busy = '0' then
+    --                 v_index_temp := to_integer(unsigned(i_data(31 downto 24))) - 1;
+    --                 if v_index_temp >= 0 and v_index_temp < n_signals then
+    --                     v_index := v_index_temp;
+    --                     o_data(v_index*24 + 23 downto v_index*24) <= i_data(23 downto 0);
+    --                 end if;
+    --             end if;
+    --         end if;
+    --              case i_state is
+    --             when s_idle =>
+    --                 if one_clk_cycle_reset = 0 then
+    --                     r_initialize <= 0; -- Reset initialization signal in idle state
+    --                     one_clk_cycle_reset := 1;
+    --                 else
+    --                    -- one_clk_cycle_reset := 0;
+    --                     r_initialize <= 1; -- Set to 1 to indicate initialization is done
+    --                 end if;
+    --             when others =>
+    --                 one_clk_cycle_reset := 0; -- Reset the one clock cycle flag in other states
+    --         end case;
+    --         -- Assign the input data to the output bus based on the index
+
+    --     end if;
+    -- end process assign_data2bus_p;
+
+
+
     assign_data2bus_p : process(i_clk)
-    variable v_index : integer range 0 to n_signals-1;
+    variable v_index : integer range 0 to n_signals;
     variable one_clk_cycle_reset : integer := 0;
     begin
         if rising_edge(i_clk) then

@@ -1,0 +1,35 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Tue Dec 23 16:47:20 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/1. MWE_/waveform.vcd"
+[dumpfile_mtime] "Tue Dec 23 16:37:12 2025"
+[dumpfile_size] 9798518
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/1. MWE_/find_cause_of_dbl_Rx.sav"
+[timestart] 15800000
+[size] 1920 1129
+[pos] 0 0
+*-22.126106 24930000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] digitaltwin.
+[treeopen] digitaltwin.ecm_cell_inst.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.
+[sst_width] 238
+[signals_width] 220
+[sst_expanded] 1
+[sst_vpaned_height] 630
+@28
+digitaltwin.setting_second_state
+@24
+digitaltwin.ow_r0[23:0]
+@28
+digitaltwin.i_clk
+@40000024
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.i_ow_r0[15:0]
+@22
+digitaltwin.previous_rx_dp[191:0]
+@23
+digitaltwin.rx_datapacket[215:0]
+[pattern_trace] 1
+[pattern_trace] 0

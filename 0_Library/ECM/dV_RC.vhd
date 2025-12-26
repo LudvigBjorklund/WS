@@ -92,30 +92,31 @@ architecture rtl of dV_RC is
     signal t2 : unsigned(n_bits_a + n_bits_dV - 1 downto 0) := (others => '0');
 
 
+    signal negative_result : std_logic := '0';
     -- Storing the dV_RC of th same instance as the stage 1 calculations
     signal r_dV : unsigned(n_bits_dV - 1 downto 0) := (others => '0');
 
-    signal dbg_len_t1 : integer := 0;
-    signal dbg_len_t2 : integer := 0;
-    signal dbg_len_t3 : integer := 0;
-    -- Debugging signals
-    signal dbg_n_int_a : integer := n_int_a;
-    signal dbg_n_frac_a: integer := n_frac_a;
-    signal dbg_n_int_c : integer := n_int_c;
-    signal dbg_n_frac_c: integer := n_frac_c;
-    signal dbg_n_int_I : integer := n_int_I;
-    signal dbg_n_frac_I : integer := n_frac_I;
-    signal dbg_n_int_dV: integer := n_int_dV;
-    signal dbg_n_frac_dV: integer := n_frac_dV;
+    -- signal dbg_len_t1 : integer := 0;
+    -- signal dbg_len_t2 : integer := 0;
+    -- signal dbg_len_t3 : integer := 0;
+    -- -- Debugging signals
+    -- signal dbg_n_int_a : integer := n_int_a;
+    -- signal dbg_n_frac_a: integer := n_frac_a;
+    -- signal dbg_n_int_c : integer := n_int_c;
+    -- signal dbg_n_frac_c: integer := n_frac_c;
+    -- signal dbg_n_int_I : integer := n_int_I;
+    -- signal dbg_n_frac_I : integer := n_frac_I;
+    -- signal dbg_n_int_dV: integer := n_int_dV;
+    -- signal dbg_n_frac_dV: integer := n_frac_dV;
     begin
         process(i_clk)
             -- Local variable to hold the intermediate subtraction result when merging steps
             variable v_t3_alt : unsigned(c_t2_newfmt + c_t2_fnewfmt - 1 downto 0);
         begin
             if rising_edge(i_clk) then
-                dbg_len_t1 <= r_t1'length;
-                dbg_len_t2 <= r_t2'length;
-                dbg_len_t3 <= r_t3'length;
+                -- dbg_len_t1 <= r_t1'length;
+                -- dbg_len_t2 <= r_t2'length;
+                -- dbg_len_t3 <= r_t3'length;
                 if i_strt = '1' then
                     case initialization_step is
                         when 0 =>
@@ -124,12 +125,17 @@ architecture rtl of dV_RC is
                             -- Calculating only stage 1 term 
                             r_t1(r_t1'left - c_msb_t1_add downto c_lsb_t1_add) <= i_c * i_I;
                             r_t2 <= r_dV*i_a;
-
+                            
 
                             initialization_step <= 1;
                             end if;
 
                         when 1 => 
+                            if r_t1(r_t1'left downto c_msb_t3_add+c_msb_t3_add_timeshift) < r_t2(r_t2'left downto c_msb_t3_add+c_msb_t3_add_timeshift) then
+                                negative_result <= '1';
+                            else
+                                negative_result <= '0';
+                            end if;
                             -- Calculate subtraction and formatting in the same cycle (merged step)
                             v_t3_alt(v_t3_alt'left downto c_msb_t3_add+c_msb_t3_add_timeshift) := (others => '0');
                             v_t3_alt(v_t3_alt'left - c_msb_t3_add -c_msb_t3_add_timeshift downto 0) := (r_t1(r_t1'left downto c_msb_t3_add+c_msb_t3_add_timeshift) - r_t2(r_t2'left downto c_msb_t3_add+c_msb_t3_add_timeshift));

@@ -14,6 +14,7 @@ entity ECM_Cell_sim is
         mif_c2          : string := "c2.mif"; -- MIF file for c2 table
         -- Simulation Parameters
         timestep        : integer := 4; -- dt^(-timestep)
+        timestep_wait_cycles : integer := 50; -- Number of clock cycles to wait between each simulation step pulse
         -- Data width parameters
         n_b_SOC         : integer := 24; -- number of bits for SOC
         n_b_I           : integer := 16; -- number of bits for current
@@ -41,7 +42,7 @@ entity ECM_Cell_sim is
         i_ow_v_ocv  : in unsigned(23 downto 0);
 
         -- Outputs
-        -- o_SOC    : out unsigned(15 downto 0);
+        o_t_sim  : out unsigned(23 downto 0);
         o_SOC    : out unsigned(23 downto 0);
         o_extra  : out unsigned(31 downto 0)
         
@@ -118,15 +119,7 @@ component ECM_Parameters_sim is
         o_busy    : out std_logic
     );
 end component ECM_Parameters_sim;
----------------------------------------------- Voltage caculation components ----------------------------------------------
 
-
------ Calculating the open circuit voltage -----
-constant wd_norm_in : integer := 13;
-constant c_SOCnorm  : unsigned(wd_norm_in - 1 downto 0) :="1100110011010"; --"0001100110011001"; -- Shifted 3
-constant c_wd_out : integer := 24; 
-
-signal  vocv_tbl_idx : unsigned(c_wd_out - 1 downto 0) := (others => '0');-- Index for Vocv table lookup, calculated from SOC using Normalizer
 component Normalizer is
     generic(
         wd_in       : integer := 16; -- r_SOC width
@@ -140,6 +133,16 @@ component Normalizer is
         o_val   : out unsigned(wd_out - 1 downto 0)
     );
 end component Normalizer;
+---------------------------------------------- Voltage caculation components ----------------------------------------------
+
+
+----- Calculating the open circuit voltage -----
+constant wd_norm_in : integer := 13;
+constant c_SOCnorm  : unsigned(wd_norm_in - 1 downto 0) :="1100110011010"; --"0001100110011001"; -- Shifted 3
+constant c_wd_out : integer := 24; 
+
+signal  vocv_tbl_idx : unsigned(c_wd_out - 1 downto 0) := (others => '0');-- Index for Vocv table lookup, calculated from SOC using Normalizer
+
 constant max_vocv_idx : unsigned(c_wd_out - 1 downto 0) := to_unsigned(10,4) & to_unsigned(0, c_wd_out-4); -- Max index for Vocv table lookup
 signal v_lut_idx : unsigned(c_wd_out - 1 downto 0) := (others => '0');-- Index for Vocv table lookup, calculated from SOC using Normalizer
 
@@ -211,6 +214,8 @@ component dV_RC is
     );
 end component dV_RC;
 ---------------------------------------------- Voltage caculation components ----------------------------------------------
+-- Simulation time signal
+signal r_sim_time : unsigned(23 downto 0) := (others => '0');
 
 -- Simulation step signal
 signal r_sim_step : std_logic := '0';
@@ -218,8 +223,8 @@ signal r_sim_start : std_logic := '0';
 signal r_reset : std_logic := '0';
 
 
-constant c_sim_step_wait_cycles : integer := 12; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
-signal r_sim_step_wait : integer range 0 to c_sim_step_wait_cycles := 0;
+constant c_sim_step_wait_cycles : integer := timestep_wait_cycles; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
+signal r_sim_step_wait : integer range 0 to timestep_wait_cycles := 0;
 
 -- The fracional bits are the remaining bits
 signal n_frac_SOC : integer := n_b_SOC - n_int_SOC;
@@ -229,7 +234,7 @@ signal n_frac_I   : integer := n_b_I - n_int_I;
 -- For integer_bits <0, the fractional bits are equal to the total bits 
 signal n_frac_Q   : integer := n_b_Q; 
 
-
+signal V_terminal : unsigned(47 downto 0) := (others => '0');
 -- ECM Cell parameter registers
 signal r_R0  : unsigned(15 downto 0) := (others => '0');
 signal r_a1  : unsigned(15 downto 0) := (others => '0');
@@ -240,6 +245,7 @@ signal r_c2  : unsigned(15 downto 0) := (others => '0');
 -- ECM Cell voltage calculation signals
 
 signal r_dV_R0 : unsigned(47 downto 0) := (others => '0');
+signal r_dV_R0_shft : unsigned(47 downto 0) := (others => '0'); -- Shifted from 11EN37 to 12EN36 
 signal r_dV_RC1 : unsigned(47 downto 0) := (others => '0');
 signal r_dV_RC2 : unsigned(47 downto 0) := (others => '0');
 
@@ -442,20 +448,23 @@ begin
 
 
         -- Processes for idle, initialize, verification, simulation, pause and more should go here
+        -- Processes for idle, initialize, verification, simulation, pause and more should go here
         proc_SM_actions : process(i_clk)
         begin
             if rising_edge(i_clk) then
-                
                 -- Add state machine actions here
                 case i_state is 
                     when s_idle => 
                         r_sim_step <= '0';
                         r_sim_start <= '0';
                         r_reset <= '1';
+                        r_sim_time <= (others => '0');
+
                     when s_init =>
                         r_reset <= '0';
                         r_sim_start <= '0';
                         r_sim_step <= '0';
+                        r_sim_time <= (others => '0');
                     when s_sim =>
                         r_sim_start <= '1';
                         if r_sim_step_wait < c_sim_step_wait_cycles then
@@ -463,6 +472,8 @@ begin
                             r_sim_step <= '0';
                         else
                             r_sim_step <= '1';
+                            r_sim_time <= r_sim_time + 1;
+
                             r_sim_step_wait <= 0;
                         end if;
        
@@ -470,6 +481,8 @@ begin
                         r_sim_step <= '0';
                         r_sim_start <= '0';
                         r_reset <= '0';
+                        r_sim_time <= (others => '0');
+
                 end case;
             end if;
         end process proc_SM_actions;
@@ -479,7 +492,8 @@ begin
         variable wait_variable : integer range 0 to 3 := 0;
         begin 
             if rising_edge(i_clk) then
-
+                r_dV_R0_shft(46 downto 0) <= r_dV_R0(47 downto 1); -- Shift dV_R0 to match 12EN36 format
+                r_dV_R0_shft(47) <= '0'; -- Sign bit set to 0 since dV_R0 is always positive
                 -- Truncate SOC and I for table lookup
                 r_SOC_tbl <= r_SOC(n_b_SOC-1 downto n_b_SOC-16);
                 r_I_tbl   <= i_I;
@@ -500,11 +514,20 @@ begin
                     --o_SOC <= r_SOC_tbl;
                   --  o_SOC(23 downto 8) <= r_SOC_tbl;
                 --    o_SOC(7 downto 0) <= (others => '0');
-                     o_SOC <= r_SOC;
+                    o_t_sim <= r_sim_time;
+
+                    o_SOC <= r_SOC;
                 end if;
             end if;
         end process process_init_finish;
 
+    voltage_calculation_process : process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            V_terminal <= v_ocv - r_dV_R0_shft - r_dV_RC1 - r_dV_RC2;
+        end if;
+    end process voltage_calculation_process;
+            
     -- Output extra data for debugging
     extra_variable_output : process(i_clk)
     begin

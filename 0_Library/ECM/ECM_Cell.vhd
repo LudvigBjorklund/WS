@@ -14,6 +14,7 @@ entity ECM_Cell is
         mif_c2          : string := "c2.mif"; -- MIF file for c2 table
         -- Simulation Parameters
         timestep        : integer := 4; -- dt^(-timestep)
+        timestep_wait_cycles : integer := 50; -- Number of clock cycles to wait between each simulation step pulse
         -- Data width parameters
         n_b_SOC         : integer := 24; -- number of bits for SOC
         n_b_I           : integer := 16; -- number of bits for current
@@ -27,6 +28,7 @@ entity ECM_Cell is
     port(
         i_clk       : in std_logic;   -- Clock
         i_state     : in t_state;     -- Simulation state
+--.     i_sw        : in unsigned(9 downto 0); -- Switches for debug and control
         i_charging  : in std_logic;   -- 1 if charging, 0 if discharging
         i_SOC0      : in unsigned(n_b_SOC-1 downto 0); -- Initial SOC
         i_I         : in unsigned(n_b_I-1 downto 0);   -- Current
@@ -41,14 +43,26 @@ entity ECM_Cell is
         i_ow_v_ocv  : in unsigned(23 downto 0);
 
         -- Outputs
-        o_SOC    : out unsigned(15 downto 0);
+        o_SOC    : out unsigned(23 downto 0);
+        o_t_sim  : out unsigned(23 downto 0);
         o_extra  : out unsigned(31 downto 0)
             );
 end entity ECM_Cell;
 
 architecture rtl of ECM_Cell is
 ---- Internal signals, registers, and components ----
-
+-- ========================== Simulation Time Counter ==========================
+component simulation_time is
+    generic(
+        timestep : integer := 3 -- dt = 2^(-timestep) seconds
+    );
+    port(
+        i_clk : in std_logic;
+        i_state : in t_state;
+        i_step : in std_logic;
+        o_time : out unsigned(23 downto 0)
+    );
+ end component simulation_time;
 -- The splitting of the ow inputs into address is 8 MSB and 16 LSB (address, data)
 -- Component declarations
 component Calc_SOC is
@@ -211,6 +225,8 @@ signal v_ocv : unsigned(47 downto 0) := (others => '0'); -- Output OCV from tabl
 
 ----- Calculating the open circuit voltage -----
 ---------------------------------------------- Voltage caculation components ----------------------------------------------
+-- Simulation time signal
+signal r_sim_time : unsigned(23 downto 0) := (others => '0');
 
 -- Simulation step signal
 signal r_sim_step : std_logic := '0';
@@ -218,8 +234,8 @@ signal r_sim_start : std_logic := '0';
 signal r_reset : std_logic := '0';
 
 
-constant c_sim_step_wait_cycles : integer := 50; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
-signal r_sim_step_wait : integer range 0 to c_sim_step_wait_cycles := 0;
+constant c_sim_step_wait_cycles : integer := timestep_wait_cycles; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
+signal r_sim_step_wait : integer range 0 to timestep_wait_cycles := 0;
 
 -- The fracional bits are the remaining bits
 constant n_frac_SOC : integer := n_b_SOC - n_int_SOC;
@@ -251,6 +267,7 @@ signal r_I_tbl  : unsigned(16-1 downto 0) := (others => '0');
 signal dbg_wait_variable : integer range 0 to 3 := 0;
 
 begin
+
     
     -- Instantiate SOC calculator
     u_calc_soc : Calc_SOC
@@ -271,7 +288,7 @@ begin
             i_state => i_state,
             i_charge => i_charging,
             i_step  => r_sim_step,
-            i_SOC0  => r_SOC0,
+            i_SOC0  => i_SOC0,
             i_I     => i_I,
             i_Q     => i_Q,
             o_SOC   => r_SOC
@@ -440,10 +457,13 @@ begin
                         r_sim_step <= '0';
                         r_sim_start <= '0';
                         r_reset <= '1';
+                        r_sim_time <= (others => '0');
+
                     when s_init =>
                         r_reset <= '0';
                         r_sim_start <= '0';
                         r_sim_step <= '0';
+                        r_sim_time <= (others => '0');
                     when s_sim =>
                         r_sim_start <= '1';
                         if r_sim_step_wait < c_sim_step_wait_cycles then
@@ -451,6 +471,8 @@ begin
                             r_sim_step <= '0';
                         else
                             r_sim_step <= '1';
+                            r_sim_time <= r_sim_time + 1;
+
                             r_sim_step_wait <= 0;
                         end if;
        
@@ -458,31 +480,42 @@ begin
                         r_sim_step <= '0';
                         r_sim_start <= '0';
                         r_reset <= '0';
+                        r_sim_time <= (others => '0');
+
                 end case;
             end if;
         end process proc_SM_actions;
     
 
                 -- Process for assigning to the table lookup inputs
+        -- Process for assigning to the table lookup inputs
         proc_set_table_inputs : process(i_clk)
         variable wait_variable : integer range 0 to 3 := 0;
         begin 
             if rising_edge(i_clk) then
+
                 -- Truncate SOC and I for table lookup
                 r_SOC_tbl <= r_SOC(n_b_SOC-1 downto n_b_SOC-16);
                 r_I_tbl   <= i_I;
             end if;
         end process proc_set_table_inputs;
+
         process_init_finish : process(i_clk)
-        variable process_not_done : boolean := true;
+        variable initialization_done : boolean := false;
         begin
             if rising_edge(i_clk) then
-                process_not_done := false;
-                if process_not_done = false then
-                    o_SOC <= i_SOC0(23 downto 8);
-                    process_not_done := true;
+              --  process_not_done := false;
+                if initialization_done = false then
+                    --o_SOC <= i_SOC0(23 downto 8);
+                    o_SOC <= i_SOC0;
+                    initialization_done := true;
+                
                 else
-                    o_SOC <= r_SOC_tbl;
+                    --o_SOC <= r_SOC_tbl;
+                  --  o_SOC(23 downto 8) <= r_SOC_tbl;
+                --    o_SOC(7 downto 0) <= (others => '0');
+                     o_SOC <= r_SOC;
+                     o_t_sim <= r_sim_time;
                 end if;
             end if;
         end process process_init_finish;
@@ -492,22 +525,42 @@ begin
     begin
         -- Outputs the dV_R0, dV_RC1, dV_RC2 and V_OCV values for debugging, incrementally each clock cycle and with a unique 4-bit identifier in the LSBs
         if rising_edge(i_clk) then
-            case dbg_wait_variable is
-                when 0 =>
-                    o_extra <= "0001" & r_dV_R0(47 downto 47-27);
-                    dbg_wait_variable <= 1;
-                when 1 =>
-                    o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
-                    dbg_wait_variable <= 2;
-                when 2 =>
-                    o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
-                    dbg_wait_variable <= 3;
-                when 3 =>
-                    o_extra <= "0100" & v_ocv(47 downto 47-27);
-                    dbg_wait_variable <= 0;
-                when others =>
-                    dbg_wait_variable <= 0;
-            end case;
+            -- case i_sw(9 downto 7) is
+            --     when "000" =>
+            --         case dbg_wait_variable is
+            --             when 0 =>
+            --                 o_extra <= "0001" & r_dV_R0(47 downto 47-27);
+            --                 dbg_wait_variable <= 1;
+            --             when 1 =>
+            --                 o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
+            --                 dbg_wait_variable <= 2;
+            --             when 2 =>
+            --                 o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
+            --                 dbg_wait_variable <= 3;
+            --             when 3 =>
+            --                 o_extra <= "0100" & v_ocv(47 downto 47-27);
+            --                 dbg_wait_variable <= 0;
+            --             when others =>
+            --                 dbg_wait_variable <= 0;
+            --         end case;
+            --     when others =>
+                     case dbg_wait_variable is
+                         when 0 =>
+                            o_extra <= "0001" & to_unsigned(0,12) & r_R0;
+                            dbg_wait_variable <= 1;
+                        when 1 =>
+                            o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
+                            dbg_wait_variable <= 2;
+                        when 2 =>
+                            o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
+                            dbg_wait_variable <= 3;
+                        when 3 =>
+                            o_extra <= "0100" & v_ocv(47 downto 47-27);
+                            dbg_wait_variable <= 0;
+                        when others =>
+                            dbg_wait_variable <= 0;
+                end case;
+              --  end case;
         end if;
     end process extra_variable_output;
 

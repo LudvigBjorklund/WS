@@ -21,6 +21,21 @@ package DT_Components_declaration is
             o_state  : out t_state
         );
     end component sim_SM;
+ -- ==========================
+-- Simulation Time Counter
+-- ==========================
+
+	 component simulation_time is
+    generic(
+        timestep : integer := 3 -- dt = 2^(-timestep) seconds
+    );
+    port(
+        i_clk : in std_logic;
+        i_state : in t_state;
+        i_step : in std_logic;
+        o_time : out unsigned(23 downto 0)
+    );
+end component simulation_time;
 -- ======================
 -- UART 32-bit Component
 -- ======================
@@ -77,6 +92,8 @@ component ECM_Cell is
             mif_c2          : string := "c2.mif"; -- MIF file for c2 table
             -- Simulation Parameters
             timestep        : integer := 4; -- dt^(-timestep)
+            timestep_wait_cycles : integer := 50; -- Number of clock cycles to wait between each simulation step pulse
+
             -- Data width parameters
             n_b_SOC         : integer := 24; -- number of bits for SOC
             n_b_I           : integer := 16; -- number of bits for current
@@ -90,6 +107,7 @@ component ECM_Cell is
         port(
             i_clk       : in std_logic;   -- Clock
             i_state     : in t_state;     -- Simulation state
+   --         i_sw        : in unsigned(9 downto 0); -- Switches for debug and control
             i_charging  : in std_logic;   -- 1 if charging, 0 if discharging
             i_SOC0      : in unsigned(n_b_SOC-1 downto 0); -- Initial SOC
             i_I         : in unsigned(n_b_I-1 downto 0);   -- Current
@@ -104,7 +122,9 @@ component ECM_Cell is
             i_ow_v_ocv  : in unsigned(23 downto 0);
 
             -- Outputs
-            o_SOC    : out unsigned(15 downto 0);
+            o_SOC    : out unsigned(23 downto 0);
+  			   o_t_sim  : out unsigned(23 downto 0);
+
             o_extra  : out unsigned(31 downto 0)
                 );
     end component ECM_Cell;
@@ -121,6 +141,8 @@ component ECM_Cell is
         mif_c2          : string := "c2.mif"; -- MIF file for c2 table
         -- Simulation Parameters
         timestep        : integer := 4; -- dt^(-timestep)
+        timestep_wait_cycles : integer := 50; -- Number of clock cycles to wait between each simulation step pulse
+
         -- Data width parameters
         n_b_SOC         : integer := 24; -- number of bits for SOC
         n_b_I           : integer := 16; -- number of bits for current
@@ -148,7 +170,7 @@ component ECM_Cell is
         i_ow_v_ocv  : in unsigned(23 downto 0);
 
         -- Outputs
-        -- o_SOC    : out unsigned(15 downto 0);
+        o_t_sim  : out unsigned(23 downto 0);
         o_SOC    : out unsigned(23 downto 0);
         o_extra  : out unsigned(31 downto 0)
         
