@@ -1,0 +1,5 @@
+logfile test_001.csv
+s_init
+I 3.5
+s_sim {t_real:10}
+s_sim {t_sim:600}

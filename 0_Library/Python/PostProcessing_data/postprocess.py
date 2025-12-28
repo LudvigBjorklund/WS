@@ -345,11 +345,14 @@ def postprocess(filename: str) -> str:
         Path to the cleaned file
     """
     # 1. Remove data before the first full data packet
-    cleaned_data = remove_data_before_first_full_dp(filename)
-    
-    # 1.1 Store the cleaned data in a new file (txt)
+    # Check first if the cleaned file already exists
     cleaned_filename = filename.replace('.txt', '_cleaned.txt')
-    save_cleaned_data(cleaned_data, cleaned_filename)
+    if os.path.exists(cleaned_filename):
+        print(f"Cleaned file already exists: {cleaned_filename} skipping cleaning step.")
+    else: 
+        cleaned_data = remove_data_before_first_full_dp(filename)
+        cleaned_filename = filename.replace('.txt', '_cleaned.txt')
+        save_cleaned_data(cleaned_data, cleaned_filename)
     # 2. Parse the cleaned data into a DataFrame
     df = to_dataframe(cleaned_filename)
     # Save the DataFrame to CSV for reference
@@ -385,14 +388,33 @@ def postprocess(filename: str) -> str:
 if __name__ == "__main__":
 
     # Default path - update this to your actual file location
-    filename = '/home/ludvig/Desktop/FPGA_Synthesis/0_Library/Python/PostProcessing_data/soc_dvR0.txt'
+    filename = '/home/ludvig/Desktop/FPGA_Synthesis/0_Library/Python/PostProcessing_data/soc_pulsed.txt'
     
     # Check if file exists
     if not os.path.exists(filename):
         print(f"Error: File not found: {filename}")
         print("Usage: python postprocess.py <path_to_file>")
         sys.exit(1)
+
+
     
     final_file = postprocess(filename)
+
+    # Read the wide format CSV and plot some data
+    wide_csv_filename = filename.replace('.txt', '_cleaned_wide_format.csv')
+    if os.path.exists(wide_csv_filename):
+        wide_df = pd.read_csv(wide_csv_filename)
+        
+        # Example plot: Plot ID_3 vs sim_time
+        if 'ID_3' in wide_df.columns:
+            plt.figure(figsize=(10, 6))
+            plt.plot(wide_df['sim_time'], wide_df['ID_3'], marker='o', linestyle='-')
+            plt.title('State of Charge vs Simulation Time')
+            plt.xlabel('Simulation Time')
+            plt.ylabel('State of Charge (ID_3)')
+            plt.grid(True)
+            plt.show()
+        else:
+            print("ID_3 column not found in the wide format DataFrame.")
 
 

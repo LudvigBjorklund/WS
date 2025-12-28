@@ -1,0 +1,47 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sun Dec 28 13:18:37 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/3. Multiple RX Assign states/waveform.vcd"
+[dumpfile_mtime] "Sun Dec 28 13:17:19 2025"
+[dumpfile_size] 48921945
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/3. Multiple RX Assign states/Check_Reset.sav"
+[timestart] 0
+[size] 1920 1009
+[pos] 1869 0
+*-28.021500 115000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] digitaltwin.
+[treeopen] digitaltwin.dt_uart_32bit_inst.
+[treeopen] digitaltwin.ecm_cell_inst.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.
+[sst_width] 238
+[signals_width] 305
+[sst_expanded] 1
+[sst_vpaned_height] 450
+@40000024
+[fpshift_count] 12
+digitaltwin.r_i[15:0]
+[fpshift_count] 24
+digitaltwin.r_q[15:0]
+[fpshift_count] 17
+digitaltwin.r_soc[23:0]
+@22
+digitaltwin.i[15:0]
+@40000024
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.tbl_read_ow_x11.r_r0_00[15:0]
+@22
+digitaltwin.r_r0[15:0]
+digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.tbl_read_ow_x11.i_raddr[7:0]
+digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.tbl_read_ow_x11.o_data[15:0]
+digitaltwin.ecm_cell_inst.u_ecm_params.o_r0[15:0]
+digitaltwin.i_sw[9:0]
+digitaltwin.o_hex0[6:0]
+digitaltwin.hex0_inst.i_bin[3:0]
+digitaltwin.hex1_inst.i_bin[3:0]
+digitaltwin.hex2_inst.i_bin[3:0]
+@23
+digitaltwin.bcd_inst.o_bcd[23:0]
+[pattern_trace] 1
+[pattern_trace] 0

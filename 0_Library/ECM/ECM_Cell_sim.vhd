@@ -264,7 +264,7 @@ constant c_mif_a2 : string := "a2.mif";
 constant c_mif_c2 : string := "c2.mif";
 
 
-signal dbg_wait_variable : integer range 0 to 3 := 0;
+signal dbg_wait_variable : integer range 0 to 4 := 0;
 begin
     
 
@@ -545,6 +545,9 @@ begin
                     dbg_wait_variable <= 3;
                 when 3 =>
                     o_extra <= "0100" & v_ocv(47 downto 47-27);
+                    dbg_wait_variable <= 4;
+                when 4 =>
+                    o_extra <= "0101" & to_unsigned(0,12) & r_R0;
                     dbg_wait_variable <= 0;
                 when others =>
                     dbg_wait_variable <= 0;

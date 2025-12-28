@@ -51,7 +51,7 @@ def format_parse_string(fmt_str):
         is_negative_format = False
 
     parts = fmt_str.split('EN')
-    return parts[0], parts[1], is_negative_format
+    return int(parts[0]),  int(parts[1]), is_negative_format
 
 
 

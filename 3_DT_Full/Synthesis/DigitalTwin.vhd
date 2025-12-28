@@ -21,7 +21,13 @@ end entity DigitalTwin;
 
 
 architecture rtl of DigitalTwin is
-constant c_sim_step_wait_cycles : integer := 4*200; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
+constant c_sim_step_wait_cycles : integer := 5000000/32; -- Number of clock cycles to wait between each simulation step pulse CHANGE BEFORE SYNTHESIS
+constant c_cycles_per_sim_second : integer := power_of_2(c_timestep);  -- Becomes 8
+signal   r_sim_seconds_counter : integer range 0 to c_cycles_per_sim_second-1 := 0;
+
+
+
+signal r_rx_assign_state : unsigned(3 downto 0) := (others => '0');
 
 constant ID_SM : integer := 1;
 constant ID_I  : integer := 2;
@@ -30,7 +36,6 @@ constant ID_Q    : integer := 4;
 constant ID_pw_clk_cycles : integer := 5;
 constant ID_pri_clk_cycles : integer := 6;
 
-signal r_rx_assign_state : unsigned(3 downto 0) := (others => '0');
 -- Second state of Assign RX data
 constant ID_ow_R0 : integer := 2;
 constant ID_ow_a1 : integer := 3;
@@ -70,13 +75,13 @@ signal r_state : t_state := s_idle; -- s_idle, s_init, s_verification, s_sim, s_
 
 
 
+
 -- Current Pulse Control Signals
-signal I : unsigned(15 downto 0) := (others => '0');
-signal pw_clk_cycles : unsigned(23 downto 0) := to_unsigned(7200000, 24);-- Pulse width in clock cycles
-signal pw_counter    : unsigned(23 downto 0) := (others => '0');-- Pulse width counter in clock cycles
-signal pri_clk_cycles : unsigned(23 downto 0) := to_unsigned(3600000, 24);-- Period in clock cycles (pulse repetition interval)
-signal pri_counter    : unsigned(23 downto 0) := (others => '0');-- Period counter in clock cycless
-signal zero_current : std_logic := '0';
+signal pw_clk_cycles : unsigned(23 downto 0) := c_hw_pw_sim_seconds;-- Pulse width in clock cycles
+signal pw_on  : std_logic := '0';
+signal pw_seconds    : unsigned(23 downto 0)  := (others => '0');-- Pulse width counter in seconds
+signal pri_seconds   : unsigned(23 downto 0)  := (others => '0');-- Period counter in seconds
+signal pri_clk_cycles : unsigned(23 downto 0) :=c_hw_pri_sim_seconds;-- Period in clock cycles (pulse repetition interval)
 -- ======================
 -- ECM Cell 
 -- ======================
@@ -84,10 +89,12 @@ signal zero_current : std_logic := '0';
 -- ==========================
 -- ECM Parameters Lookup Signals
 -- ==========================
-signal r_SOC_init : unsigned(23 downto 0) := to_unsigned(100, 7) & to_unsigned(0, 17); -- Initial SOC value (Integer part only)
+signal r_SOC_init : unsigned(23 downto 0) := c_hw_SOC0; -- Initial SOC value (Integer part only)
 signal r_SOC      : unsigned(23 downto 0) := r_SOC_init; -- SOC value signal
 
 signal r_I       : unsigned(15 downto 0) := c_hw_I; -- Current value signal
+signal I : unsigned(15 downto 0) := c_hw_I; -- Input to the 
+  
 signal r_Q   : unsigned(n_b_Q-1 downto 0) := c_hw_Q;
 
 -- Overwrite parameters signals
@@ -99,6 +106,9 @@ signal ow_c2 : unsigned(23 downto 0) := c_hw_ow_c2;
 
 signal ow_v_ocv : unsigned(23 downto 0) := c_hw_ow_v_ocv; -- Overwrite OCV signal (1D LUT)
 
+
+-- 
+signal r_R0     : unsigned(15 downto 0) := (others => '0');
 signal dV_R0    : unsigned(23 downto 0) := (others => '0');
 signal dV_RC1   : unsigned(23 downto 0) := (others => '0');
 signal dV_RC2   : unsigned(23 downto 0) := (others => '0');
@@ -114,12 +124,21 @@ signal r_tsim : unsigned(23 downto 0) := (others => '0');
 signal previous_rx_dp : unsigned(((c_rx_no_sig - 1) * 24) - 1 downto 0) := (others => '0');
 signal setting_first_state  : std_logic := '0';
 signal setting_second_state : std_logic := '0';
+-- Simulation Time 
+signal r_seconds : unsigned(5 downto 0);
+signal r_minutes : unsigned(5 downto 0);
+signal r_hours   : unsigned(5 downto 0);
+
 -- ==========================
 -- Debug Signals
 -- ==========================
 signal bcd_in  : unsigned(19 downto 0) := (others => '0');
 signal bcd_out : unsigned(23 downto 0) := (others => '0');
 signal hex0, hex1, hex2, hex3, hex4, hex5 : unsigned( 3 downto 0) := (others => '0');
+
+signal clock_bcd_select : integer range 0 to 2 := 0;
+signal hex_ss0, hex_ss1, hex_mm0, hex_mm1, hex_hh0, hex_hh1 : unsigned(3 downto 0) := (others => '0');
+
 
 signal dV_assign_debug : unsigned(3 downto 0) := (others => '0');
 
@@ -164,6 +183,8 @@ DT_UART_32bit_inst : DT_UART_32bit
  );
 
 --
+
+
             
 -- ==========================
 -- ECM Cell Component Mapping
@@ -254,63 +275,114 @@ hex5_inst : hex_digits
 -- ============================ PROCESSES ===================================
 -- ==========================================================================
 
+o_led(8) <= pw_on;
 
-pulse_current_process : process(i_clk)
-
-begin
-    if rising_edge(i_clk) then
-        case r_state is 
-
-            when s_sim =>
-                if zero_current = '1' then
-                    I <= (others => '0');
-                    if r_sim_step_wait < c_sim_step_wait_cycles then
-                        r_sim_step_wait <= r_sim_step_wait + 1;
-                    else
-                        r_sim_step_wait <= 0;
-                        if pri_counter < pri_clk_cycles then
-                            pri_counter <= pri_counter + 1;
-                        else
-                            pri_counter <= (others => '0');
-                            zero_current <= '0';
-                        end if;
-                    end if;
-                    
+sim_clock_process : process(i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if r_state = s_sim then
+                if r_sim_step_wait < c_sim_step_wait_cycles then
+                    r_sim_step_wait <= r_sim_step_wait + 1;
                 else
-                    I <= r_I;
-                    if r_sim_step_wait < c_sim_step_wait_cycles then
-                        r_sim_step_wait <= r_sim_step_wait + 1;
+                    r_sim_step_wait <= 0;
+                    -- When r_tsim reaches c_cycles_per_sim_second, increment simulation time by one second (r_sim_seconds_counter)    
+                    if r_sim_seconds_counter < c_cycles_per_sim_second-1 then
+                        r_sim_seconds_counter <= r_sim_seconds_counter + 1;
                     else
-                        if pw_counter < pw_clk_cycles then
-                            pw_counter <= pw_counter + 1;
+                        r_sim_seconds_counter <= 0;
+                        if pw_on = '1' then
+                            I <= r_I;
+                            if pw_seconds < pw_clk_cycles then
+                                pw_seconds <= pw_seconds + 1;
+                            else
+                                pw_seconds <= (others => '0');
+                                pw_on <= '0';
+                            end if;
                         else
-                            pw_counter <= (others => '0');
-                            zero_current <= '1';
+                            -- PRI Counter  
+                            I <= (others => '0');
+                            if pri_seconds < pri_clk_cycles then
+                                pri_seconds <= pri_seconds + 1;
+                            else
+                                pri_seconds <= (others => '0');
+                                pw_on <= '1';
+                            end if;
+                        end if;
+
+                        -- One second has passed in simulation time
+                        if r_seconds < 59 then
+                            r_seconds <= r_seconds + 1;
+                            
+                            
+                        else
+                            r_seconds <= (others => '0');
+                            
+                            if r_minutes < 59 then
+                                r_minutes <= r_minutes + 1;
+                            else
+                                r_minutes <= (others => '0');
+                                if r_hours < 23 then
+                                    r_hours <= r_hours + 1;
+                                else
+                                    r_hours <= (others => '0')  ;
+                                end if;
+                            end if;
                         end if;
                     end if;
                 end if;
-            when others =>
-                null;
-        end case;
-        
+            else 
+                I <= r_I;
+					 if r_state = s_idle then
+						-- Resetting
+						pw_on <= '0';
+                        pw_seconds <= (others => '0');
+                        pri_seconds <= (others => '0');
+						r_sim_seconds_counter <= 0;
+						r_seconds <= (others => '0');
+                        r_minutes <= (others => '0');
+                        r_hours   <= (others => '0');
+
+					 end if;
+            end if;
+        end if;
+end process sim_clock_process;
+
+
+
+-- ========================== Control Update Signals Process ==========================
+control_update_signals : process(i_clk)
+    variable v_initialization_done : std_logic := '0';
+
+    begin
+        if rising_edge(i_clk) then
+
+
+            if v_initialization_done = '0' then
+                v_initialization_done := '1';
+                r_SM_no <= c_rx_init_datapacket(2 downto 0);
+            else
+                    r_SM_no <= rx_datapacket(2 downto 0);
+                    r_rx_assign_state <= rx_datapacket(7 downto 4);
+                    if r_rx_assign_state = "0000" then
+                        if rx_datapacket(rx_datapacket'left downto 24) /= previous_rx_dp then
+                            previous_rx_dp <= rx_datapacket(rx_datapacket'left downto 24);
+                            setting_first_state <= '1';
+                            setting_second_state <= '0';
+                        else 
+                            null;
+                        end if;
+                    end if;
+                    if r_rx_assign_state = "0001" then
+                        if rx_datapacket(rx_datapacket'left downto 24) /= previous_rx_dp then
+                            previous_rx_dp <= rx_datapacket(rx_datapacket'left downto 24);
+                            setting_first_state <= '0';
+                            setting_second_state <= '1';
+                        end if;
+                    end if;
                 
-    end if;
-end process pulse_current_process;
+                end if;
 
--- ========================== RX Data Assignment Process ==========================
-assign_rx_data : process(i_clk)
-variable v_initialization_done : std_logic := '0';
-begin 
-    if rising_edge(i_clk) then
-
-       if v_initialization_done = '0' then
-           v_initialization_done := '1';
-           r_SM_no <= c_rx_init_datapacket(2 downto 0);
-       else
-            r_SM_no <= rx_datapacket(2 downto 0);
-            r_rx_assign_state <= rx_datapacket(7 downto 4);
             if rx_datapacket(7 downto 4) /= prev_rx_assign_state then
-                changed_rx_assign_state <= '1';
                 prev_rx_assign_state <= rx_datapacket(7 downto 4);
                 -- Reset update signals when RX assign state changes
                 update_signal <= (others => '0'); 
@@ -330,41 +402,28 @@ begin
                 end if;
             end if;
 
-              if r_rx_assign_state = "0000" then
-                if rx_datapacket(rx_datapacket'left downto 24) /= previous_rx_dp then
-                    previous_rx_dp <= rx_datapacket(rx_datapacket'left downto 24);
-                    setting_first_state <= '1';
-                    setting_second_state <= '0';
-                    -- Checking what part of the rx_datapacket has changed (from previous value, 24 bits at a time)
-
-
-                else 
-                    null;
-                   -- setting_second_state <= '1';
-                end if;
-            end if;
-            if r_rx_assign_state = "0001" then
-                if rx_datapacket(rx_datapacket'left downto 24) /= previous_rx_dp then
-                    previous_rx_dp <= rx_datapacket(rx_datapacket'left downto 24);
-                    setting_first_state <= '0';
-                    setting_second_state <= '1';
-              
-                end if;
-            end if;
-          
         end if;
+end process control_update_signals;
+
+-- ========================== RX Data Assignment Process ==========================
+assign_rx_data : process(i_clk)
+begin 
+    if rising_edge(i_clk) then
 
         case r_rx_assign_state is
+            -- ========== State 0 : Basic Parameters ==========
             when "0000" =>
                 case r_state is
-                    when s_idle =>
-                        -- Do nothing
-                        r_SM_no <= rx_datapacket(2 downto 0);
-                        -- Reset to hardware values
-                        r_Q     <= c_hw_Q;
 
+                    when s_idle =>
+                        -- ============= Resetting Parameters to Hardware Defaults =============
+                        r_Q     <= c_hw_Q;
+                        r_I     <= c_hw_I;
+                        r_SOC_init <= c_hw_SOC0;
+                        -- Reset Pulse Parameters
+                        pw_clk_cycles <= c_hw_pw_sim_seconds;
+                        pri_clk_cycles <= c_hw_pri_sim_seconds;
                     when s_init =>
-                        r_SM_no     <= rx_datapacket(2 downto 0);
                         if update_signal(0) = '1' then
                             r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
                         end if;
@@ -374,56 +433,58 @@ begin
                         if update_signal(2) = '1' then
                             r_Q         <= rx_datapacket(ID_Q*24-1-(24-n_b_Q) downto (ID_Q-1)*24);
                         end if;
-                        -- r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
-                        -- r_SOC_init  <= rx_datapacket(ID_SOC0*24-1-(24-n_b_SOC0) downto (ID_SOC0-1)*24);
-                        -- r_Q         <= rx_datapacket(ID_Q*24-1-(24-n_b_Q) downto (ID_Q-1)*24);
-
-                        -- Overwrite table data 
-                    --   ow_R0       <= rx_datapacket(ID_ow_R0*24-1 downto (ID_ow_R0-1)*24);
-
-
-                    when s_verification =>
-                        -- Do nothing
-                        r_SM_no <= rx_datapacket(2 downto 0);
-                    when s_sim =>
-                        r_SM_no <= rx_datapacket(2 downto 0);
-                        if update_signal(0) = '1' then
-                            r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
-                        end if;
+                        -- ==== Setting Pulse Data Parameters INIT ====
                         if update_signal(ID_pw_clk_cycles-2) = '1' then
                             pw_clk_cycles <= rx_datapacket(ID_pw_clk_cycles*24-1 downto (ID_pw_clk_cycles-1)*24);
                         end if;
+                        if update_signal(ID_pri_clk_cycles-2) = '1' then
+                            pri_clk_cycles <= rx_datapacket(ID_pri_clk_cycles*24-1 downto (ID_pri_clk_cycles-1)*24);
+                        end if;
+                    when s_verification =>
+                        null;
+                    when s_sim =>
+                        null;
+                        if update_signal(0) = '1' then
+                            r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
+                        end if;
+								if update_signal(2) = '1' then
+                            r_Q         <= rx_datapacket(ID_Q*24-1-(24-n_b_Q) downto (ID_Q-1)*24);
+                        end if;
+                        -- ==== Setting Pulse Data Parameters Simulation ====
+                        if update_signal(ID_pw_clk_cycles-2) = '1' then
+                            pw_clk_cycles <= rx_datapacket(ID_pw_clk_cycles*24-1 downto (ID_pw_clk_cycles-1)*24);
+                        end if;
+                        if update_signal(ID_pri_clk_cycles-2) = '1' then
+                            pri_clk_cycles <= rx_datapacket(ID_pri_clk_cycles*24-1 downto (ID_pri_clk_cycles-1)*24);
+                        end if;
                     when others =>
-                            r_SM_no <= rx_datapacket(2 downto 0);
                         null;
                 end case;
+            -- ========== State 1 : Overwrite Parameters ==========
             when "0001" =>
                 case r_state is 
 
                     when s_idle =>
-
+                        null;
                     when s_init =>
-                        r_SM_no     <= rx_datapacket(2 downto 0);
                         if setting_second_state = '0' then
                             null; -- We wait for a complete update of the UART data packet 
                         else
-                            if update_signal(0) = '1' then
+                            if update_signal(ID_ow_R0-2) = '1' then
                                 ow_R0        <= rx_datapacket(ID_ow_R0*24-1 downto (ID_ow_R0-1)*24);
                             end if;
-                            if update_signal(1) = '1' then
+                            if update_signal(ID_ow_a1-2) = '1' then
                                 ow_a1        <= rx_datapacket(ID_ow_a1*24-1 downto (ID_ow_a1-1)*24);
                             end if;
-                            if update_signal(2) = '1' then
-                            ow_c1        <= rx_datapacket(ID_ow_c1*24-1 downto (ID_ow_c1-1)*24);
+                            if update_signal(ID_ow_c1-2) = '1' then
+                                ow_c1        <= rx_datapacket(ID_ow_c1*24-1 downto (ID_ow_c1-1)*24);
                             end if;
-                            if update_signal(3) = '1' then
+                            if update_signal(ID_ow_a2-2) = '1' then
                                 ow_a2        <= rx_datapacket(ID_ow_a2*24-1 downto (ID_ow_a2-1)*24);
                             end if;
-
-                            if update_signal(4) = '1' then
+                            if update_signal(ID_ow_c2-2) = '1' then
                                 ow_c2        <= rx_datapacket(ID_ow_c2*24-1 downto (ID_ow_c2-1)*24);
                             end if;
-
                         end if;
                     when s_verification =>
                         null;
@@ -435,36 +496,11 @@ begin
             
 
             when others =>
-                case r_state is
-                    when s_idle =>
-                        -- Do nothing
-                        r_SM_no <= rx_datapacket(2 downto 0);
-
-                    when s_init =>
-                        r_SM_no     <= rx_datapacket(2 downto 0);
-                        r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
-                        r_SOC_init  <= rx_datapacket(ID_SOC0*24-1-(24-n_b_SOC0) downto (ID_SOC0-1)*24);
-                        r_Q         <= rx_datapacket(ID_Q*24-1-(24-n_b_Q) downto (ID_Q-1)*24);
-
-                        -- Overwrite table data 
-                    --   ow_R0       <= rx_datapacket(ID_ow_R0*24-1 downto (ID_ow_R0-1)*24);
-
-
-                    when s_verification =>
-                        -- Do nothing
-                        r_SM_no <= rx_datapacket(2 downto 0);
-                        r_I         <= rx_datapacket(ID_I*24-1-(24-n_b_I) downto (ID_I-1)*24);
-
-                    when s_sim =>
-                        r_SM_no <= rx_datapacket(2 downto 0);
-
-                    when others =>
-                            r_SM_no <= rx_datapacket(2 downto 0);
-                        null;
-                end case;
+               null;
         end case;
     end if;
 end process assign_rx_data;
+
 
 -- ========================== TX Data Assignment Process ==========================
 assign_tx_data : process(i_clk)
@@ -545,42 +581,6 @@ end process assign_tx_data;
     end process tmp_proc_sw_state;
 
 
--- ==================
--- Simulation State Process
--- ==================
---
---simulation_process : process(i_clk)
---begin
---    if rising_edge(i_clk) then
---        case r_state is
---            when s_idle =>
---                -- Do nothing
---                null;
---            when s_init =>
---                -- Do nothing
---                null;
---            when s_verification =>
---                -- Do nothing
---                null;
---            when s_sim =>
---                null;
---            when s_pause =>
---                -- Do nothing
---                null;
---            when s_end =>
---                -- Do nothing
---                null;
---            when s_reset =>
---                -- Do nothing
---                null;
---            when others =>
---                -- Do nothing
---                null;
---        end case;
---    end if;
---end process simulation_process;
-
-
 
 
 -- =============================================== Debugging Processes ===============================================
@@ -618,6 +618,7 @@ end process assign_extra_debug_to_voltage;
 
 
 connect_bcd_input : process(i_clk)
+variable v_init_strt : std_logic := '0';
 begin
     if rising_edge(i_clk) then
         case r_state is
@@ -632,7 +633,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0001" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_R0(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_R0(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -640,7 +641,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0010" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_RC1(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_RC1(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -648,7 +649,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0011" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_RC2(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_RC2(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -656,22 +657,55 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0100" =>
-                        bcd_in <= to_unsigned(0, 8) & V_ocv(19 downto 19-11);
+                        bcd_in <= to_unsigned(0, 8) & V_ocv(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
                         hex3 <= bcd_out(15 downto 12);
                         hex4 <= bcd_out(19 downto 16);
-                        hex5 <= (others => '1');
                     when "0101" => -- Current (4 MSBs , so only need 2 hex digits)
-                        bcd_in <= to_unsigned(0, 16) & r_I(15 downto 12);
-                        o_led(9 downto 3) <= r_I(11 downto 5); -- Display some of the current value on the LEDs
+                        bcd_in <= to_unsigned(0, 16) & I(15 downto 12);
+                       -- o_led(9 downto 3) <= I(11 downto 5); -- Display some of the current value on the LEDs
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= (others => '1');
                         hex3 <= (others => '1');
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
+					when "0110" => -- Current (4 MSBs , so only need 2 hex digits)
+                        bcd_in <= to_unsigned(0, 16) & r_I(15 downto 12);
+                       -- o_led(9 downto 3) <= r_I(11 downto 5); -- Display some of the current value on the LEDs
+                        hex0 <= bcd_out(3 downto 0);
+                        hex1 <= bcd_out(7 downto 4);
+                        hex2 <= (others => '1');
+                        hex3 <= (others => '1');
+                        hex4 <= (others => '1');
+                        hex5 <= (others => '1');
+                                        when "1000" => 
+
+                        -- Start a loop that first inputs seconds, then minutes, then hours to bcd_in,
+                        if clock_bcd_select = 0 then
+                            bcd_in <= to_unsigned(0, 14) & r_seconds(5 downto 0);
+                            clock_bcd_select <= 1;
+                            -- If initialized once
+                            if v_init_strt = '1' then
+                                hex_hh0 <= bcd_out(3 downto 0);
+                                hex_hh1 <= bcd_out(7 downto 4);
+                            else
+                                v_init_strt := '1';
+                            end if;
+                        elsif clock_bcd_select = 1 then
+                            bcd_in <= to_unsigned(0, 14) & r_minutes(5 downto 0);
+                            clock_bcd_select <= 2;
+                            hex_ss0 <= bcd_out(3 downto 0);
+                            hex_ss1 <= bcd_out(7 downto 4);
+                        else
+                            bcd_in <= to_unsigned(0, 14) & r_hours(5 downto 0);
+                            clock_bcd_select <= 0;
+                            hex_mm0 <= bcd_out(3 downto 0);
+                            hex_mm1 <= bcd_out(7 downto 4);
+                        end if;
+                        
                     when others =>
                         bcd_in <= to_unsigned(0, bcd_in'length- r_SM_no'length) & r_SM_no;
                 end case;
@@ -686,7 +720,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0001" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_R0(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_R0(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -694,7 +728,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0010" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_RC1(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_RC1(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -702,7 +736,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0011" =>
-                        bcd_in <= to_unsigned(0, 9) & dV_RC2(19 downto 19-10);
+                        bcd_in <= to_unsigned(0, 8) & dV_RC2(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -710,7 +744,7 @@ begin
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
                     when "0100" =>
-                        bcd_in <= to_unsigned(0, 8) & V_ocv(19 downto 19-11);
+                        bcd_in <= to_unsigned(0, 8) & V_ocv(23 downto 12);
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= bcd_out(11 downto 8);
@@ -718,11 +752,68 @@ begin
                         hex4 <= bcd_out(19 downto 16);
                         hex5 <= (others => '1');
                     when "0101" => -- Current (4 MSBs , so only need 2 hex digits)
-                        bcd_in <= to_unsigned(0, 16) & r_I(15 downto 12);
-                        o_led(9 downto 3) <= r_I(11 downto 5); -- Display some of the current value on the LEDs
+                        bcd_in <= to_unsigned(0, 16) & I(15 downto 12);
+                      --  o_led(9 downto 3) <= I(11 downto 5); -- Display some of the current value on the LEDs
                         hex0 <= bcd_out(3 downto 0);
                         hex1 <= bcd_out(7 downto 4);
                         hex2 <= (others => '1');
+                        hex3 <= (others => '1');
+                        hex4 <= (others => '1');
+                        hex5 <= (others => '1');
+                    when "0110" => -- Current (4 MSBs , so only need 2 hex digits)
+                        bcd_in <= to_unsigned(0, 16) & r_I(15 downto 12);
+                        --o_led(9 downto 3) <= r_I(11 downto 5); -- Display some of the current value on the LEDs
+                        hex0 <= bcd_out(3 downto 0);
+                        hex1 <= bcd_out(7 downto 4);
+                        hex2 <= (others => '1');
+                        hex3 <= (others => '1');
+                        hex4 <= (others => '1');
+                        hex5 <= (others => '1');
+                    when "0111" => 
+                        bcd_in <= r_tsim(19 downto 0);
+                        hex0 <= bcd_out(3 downto 0);
+                        hex1 <= bcd_out(7 downto 4);
+                        hex2 <= bcd_out(11 downto 8);
+                        hex3 <= bcd_out(15 downto 12);
+                        hex4 <= bcd_out(19 downto 16);
+                        hex5 <= bcd_out(23 downto 20);
+                    when "1000" => 
+
+                        -- Start a loop that first inputs seconds, then minutes, then hours to bcd_in,
+                        if clock_bcd_select = 0 then
+                            bcd_in <= to_unsigned(0, 14) & r_seconds(5 downto 0);
+                            clock_bcd_select <= 1;
+                            -- If initialized once
+                            if v_init_strt = '1' then
+                                hex_hh0 <= bcd_out(3 downto 0);
+                                hex_hh1 <= bcd_out(7 downto 4);
+                            else
+                                v_init_strt := '1';
+                            end if;
+                        elsif clock_bcd_select = 1 then
+                            bcd_in <= to_unsigned(0, 14) & r_minutes(5 downto 0);
+                            clock_bcd_select <= 2;
+                            hex_ss0 <= bcd_out(3 downto 0);
+                            hex_ss1 <= bcd_out(7 downto 4);
+                        else
+                            bcd_in <= to_unsigned(0, 14) & r_hours(5 downto 0);
+                            clock_bcd_select <= 0;
+                            hex_mm0 <= bcd_out(3 downto 0);
+                            hex_mm1 <= bcd_out(7 downto 4);
+                        end if;
+                        hex0 <= hex_ss0;
+                        hex1 <= hex_ss1;
+                        hex2 <= hex_mm0;
+                        hex3 <= hex_mm1;
+                        hex4 <= hex_hh0;
+                        hex5 <= hex_hh1;
+                        
+
+                    when "1001" =>
+                        bcd_in <= to_unsigned(0,12) & r_R0(15 downto 8);
+                        hex0 <= bcd_out(3 downto 0);
+                        hex1 <= bcd_out(7 downto 4);
+                        hex2 <= bcd_out(11 downto 8);
                         hex3 <= (others => '1');
                         hex4 <= (others => '1');
                         hex5 <= (others => '1');
@@ -733,6 +824,7 @@ begin
     end if;
 end process connect_bcd_input;
 
+       
        
     
 

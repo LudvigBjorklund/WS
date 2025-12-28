@@ -264,7 +264,7 @@ signal r_SOC    : unsigned(24-1 downto 0) := (others => '0');
 signal r_SOC_tbl : unsigned(15 downto 0) := (others => '0');
 signal r_I_tbl  : unsigned(16-1 downto 0) := (others => '0');
 
-signal dbg_wait_variable : integer range 0 to 3 := 0;
+signal dbg_wait_variable : integer range 0 to 4 := 0;
 
 begin
 
@@ -466,7 +466,7 @@ begin
                         r_sim_time <= (others => '0');
                     when s_sim =>
                         r_sim_start <= '1';
-                        if r_sim_step_wait < c_sim_step_wait_cycles then
+                        if r_sim_step_wait < c_sim_step_wait_cycles-1 then
                             r_sim_step_wait <= r_sim_step_wait + 1;
                             r_sim_step <= '0';
                         else
@@ -511,57 +511,38 @@ begin
                     initialization_done := true;
                 
                 else
-                    --o_SOC <= r_SOC_tbl;
-                  --  o_SOC(23 downto 8) <= r_SOC_tbl;
-                --    o_SOC(7 downto 0) <= (others => '0');
                      o_SOC <= r_SOC;
                      o_t_sim <= r_sim_time;
                 end if;
             end if;
         end process process_init_finish;
 
-            -- Output extra data for debugging
+    -- Output extra data for debugging
     extra_variable_output : process(i_clk)
     begin
         -- Outputs the dV_R0, dV_RC1, dV_RC2 and V_OCV values for debugging, incrementally each clock cycle and with a unique 4-bit identifier in the LSBs
         if rising_edge(i_clk) then
-            -- case i_sw(9 downto 7) is
-            --     when "000" =>
-            --         case dbg_wait_variable is
-            --             when 0 =>
-            --                 o_extra <= "0001" & r_dV_R0(47 downto 47-27);
-            --                 dbg_wait_variable <= 1;
-            --             when 1 =>
-            --                 o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
-            --                 dbg_wait_variable <= 2;
-            --             when 2 =>
-            --                 o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
-            --                 dbg_wait_variable <= 3;
-            --             when 3 =>
-            --                 o_extra <= "0100" & v_ocv(47 downto 47-27);
-            --                 dbg_wait_variable <= 0;
-            --             when others =>
-            --                 dbg_wait_variable <= 0;
-            --         end case;
-            --     when others =>
-                     case dbg_wait_variable is
-                         when 0 =>
-                            o_extra <= "0001" & to_unsigned(0,12) & r_R0;
-                            dbg_wait_variable <= 1;
-                        when 1 =>
-                            o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
-                            dbg_wait_variable <= 2;
-                        when 2 =>
-                            o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
-                            dbg_wait_variable <= 3;
-                        when 3 =>
-                            o_extra <= "0100" & v_ocv(47 downto 47-27);
-                            dbg_wait_variable <= 0;
-                        when others =>
-                            dbg_wait_variable <= 0;
-                end case;
-              --  end case;
+            case dbg_wait_variable is
+                when 0 =>
+                    o_extra <= "0001" & r_dV_R0(47 downto 47-27);
+                    dbg_wait_variable <= 1;
+                when 1 =>
+                    o_extra <= "0010" & r_dV_RC1(47 downto 47-27);
+                    dbg_wait_variable <= 2;
+                when 2 =>
+                    o_extra <= "0011" & r_dV_RC2(47 downto 47-27);
+                    dbg_wait_variable <= 3;
+                when 3 =>
+                    o_extra <= "0100" & v_ocv(47 downto 47-27);
+                    dbg_wait_variable <= 4;
+                when 4 =>
+                    o_extra <= "0101" & to_unsigned(0,12) & r_R0;
+                    dbg_wait_variable <= 0;
+                when others =>
+                    dbg_wait_variable <= 0;
+            end case;
         end if;
     end process extra_variable_output;
+
 
 end architecture rtl;

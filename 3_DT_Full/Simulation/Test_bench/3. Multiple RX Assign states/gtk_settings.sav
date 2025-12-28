@@ -1,0 +1,25 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Sun Dec 28 08:16:10 2025
+[*]
+[dumpfile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/3. Multiple RX Assign states/waveform.vcd"
+[dumpfile_mtime] "Sun Dec 28 08:15:52 2025"
+[dumpfile_size] 40192420
+[savefile] "/home/ludvig/Desktop/FPGA_Synthesis/3_DT_Full/Simulation/Test_bench/3. Multiple RX Assign states/gtk_settings.sav"
+[timestart] 0
+[size] 1920 1033
+[pos] -1 -1
+*-27.043695 271800000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] digitaltwin.
+[treeopen] digitaltwin.ecm_cell_inst.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.
+[treeopen] digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.
+[sst_width] 238
+[signals_width] 108
+[sst_expanded] 1
+[sst_vpaned_height] 292
+@40000024
+[fpshift_count] 8
+digitaltwin.ecm_cell_inst.u_ecm_params.r0_lut.tbl_read_ow_x11.r_r0_00[15:0]
+[pattern_trace] 1
+[pattern_trace] 0

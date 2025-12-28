@@ -104,6 +104,8 @@ constant c_hw_SM : unsigned(n_b_state-1 downto 0) := "000"; -- Initial state is 
 constant c_hw_dV_num         : integer := 0;     -- Default value for dV
 constant c_hw_I_num          : integer := 2;     -- Default value for I (2A initial current)
 constant c_hw_SOC0_num       : integer := 100;   -- Default value for SOC (100%)
+constant c_hw_pw_sec_num     : integer := 60;    -- Default wait in Simulation Seconds
+constant c_hw_pri_sec_num 	  : integer := 60;
 
 -- ==== ECM Parameters ====
 constant c_hw_R0_num         : integer := 127;   -- Default value for R0 mOhms (0.127 Ohms) 
@@ -115,7 +117,6 @@ constant c_hw_c1 : unsigned(n_b_c - 1 downto 0) := "0100111011000100"; -- Initia
 constant c_hw_a2 : unsigned(n_b_a - 1 downto 0) := "0000010110110110"; -- Initial value for a2 (1/(C2*R2))
 constant c_hw_c2 : unsigned(n_b_c - 1 downto 0) := "1011011000001011"; -- Initial value for c2 (1/(C2))
 constant c_hw_v_oc : unsigned(19 downto 0) := "10101111000000000000";  -- Initial value for V_OCV (2800 mV 12EN36)
-
 
 constant c_hw_Q        : unsigned(n_b_Q - 1 downto 0) := "0110010100100010"; -- The inverted Q_value (multiplied by 3600) ~  18 Ah
 constant c_hw_ow_R0 : unsigned(23 downto 0) := to_unsigned(c_hw_2D_addr_init, n_b_ow_addr) & c_hw_R0;
@@ -131,6 +132,10 @@ constant c_hw_dV_R0    : unsigned(n_b_dV - 1 downto 0) := to_unsigned(c_hw_dV_nu
 
 constant c_hw_I         : unsigned(n_b_I - 1 downto 0) := to_unsigned(c_hw_I_num, fmt_int_I) & to_unsigned(0, fmt_frac_I);
 constant c_hw_SOC0      : unsigned(n_b_SOC - 1 downto 0) := to_unsigned(c_hw_SOC0_num, fmt_int_SOC) & to_unsigned(0, fmt_frac_SOC); -- Initial SOC value (100% in 24 bits fixed point 7.17 format)
+
+
+constant c_hw_pw_sim_seconds : unsigned(23 downto 0) := to_unsigned(c_hw_pw_sec_num,24);
+constant c_hw_pri_sim_seconds : unsigned(23 downto 0) := to_unsigned(c_hw_pri_sec_num,24);
 
     -- =============================================================================================
     -- =========================== UART Settings =============================
